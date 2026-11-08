@@ -4,7 +4,7 @@ import { randomBytes, createCipheriv, createDecipheriv, randomUUID } from 'node:
 import path from 'node:path';
 import { z } from './deps.mjs';
 
-export const profileSchema = z.object({ name: z.string().trim().min(2).max(100), niche: z.string().trim().min(2).max(200), audience: z.string().trim().min(2).max(300), brief: z.string().max(12000).default(''), color: z.string().regex(/^#[0-9a-fA-F]{6}$/).default('#b5ed75'), voiceId: z.string().regex(/^[A-Za-z0-9_-]*$/).max(100).default('') });
+export const profileSchema = z.object({ name: z.string().trim().min(2), niche: z.string().trim().min(2), audience: z.string().trim().min(2), brief: z.string().default(''), color: z.string().regex(/^#[0-9a-fA-F]{6}$/).default('#b5ed75'), voiceId: z.string().regex(/^[A-Za-z0-9_-]*$/).max(100).default('') });
 export const jobSchema = z.object({ profileId: z.string().uuid(), title: z.string().trim().min(3).max(140), topic: z.string().trim().min(10).max(12000), type: z.enum(['video','series','vsl']), style: z.enum(['motion','2d']), episodes: z.number().int().min(1).max(25), duration: z.number().int().min(30).max(300), maxCredits: z.number().int().min(100).max(30000), requestKey: z.string().uuid() }).superRefine((v,c)=>{
   if(v.type==='series' && v.episodes<10)c.addIssue({code:'custom',message:'Una serie debe tener de 10 a 25 capítulos.'});
   if(v.type!=='series' && v.episodes!==1)c.addIssue({code:'custom',message:'Un video individual tiene un capítulo.'});
