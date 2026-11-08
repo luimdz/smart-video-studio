@@ -1,4 +1,5 @@
 import http from 'node:http';
+import {listVoices} from './voices.mjs';
 import { revision } from './revision.mjs';
 const runningRevision=await revision();
 import path from 'node:path';
@@ -82,8 +83,23 @@ const server=http.createServer(async(req,res)=>{try{
       store.saveSettings({elevenSubscription:{used:b.character_count,limit:b.character_limit,reset:b.next_character_count_reset_unix||null,at:new Date().toISOString()}});
     }
     else if(url.pathname==='/api/pairing-token'){let token=store.secrets().n8nToken;if(!token){token=randomBytes(32).toString('hex');store.saveSettings({},{n8nToken:token});}json(res,200,{token});return;}
-    else if(url.pathname==='/api/voices'){const key=store.secrets().elevenKey;if(!key)throw new Error('Guarda primero la clave de ElevenLabs.');const r=await fetch('https://api.elevenlabs.io/v1/voices',{headers:{'xi-api-key':key},signal:AbortSignal.timeout(20000),redirect:'error'});if(!r.ok)throw new Error(`ElevenLabs respondió ${r.status}.`);const out=await r.json();json(res,200,{voices:out.voices.map(v=>({id:v.voice_id,name:v.name,labels:v.labels}))});return;}
-    else if(url.pathname==='/api/profile-voice'){const p=store.list('profiles').find(p=>p.id===data.id);if(!p)throw new Error('Perfil no encontrado.');p.voiceId=z.string().regex(/^[a-zA-Z0-9_-]{1,100}$/).parse(data.voiceId);store.db.prepare('UPDATE profiles SET data=? WHERE id=?').run(JSON.stringify(p),p.id);}
+    else if(url.pathname==='/api/voices'){
+      const key=store.secrets().elevenKey;if(!key)throw new Error('Guarda primero la clave de ElevenLabs.');
+      const query=z.object({source:z.enum(['account','library']).default('library'),region:z.enum(['all','latam','es-MX','es-CO','es-AR','es-CL','es-PE','es-ES']).default('latam'),search:z.string().max(200).default(''),page:z.number().int().min(0).max(10000).default(0),cursor:z.string().max(2000).default('')}).parse(data);
+      json(res,200,await listVoices(key,query));return;
+    }
+    else if(url.pathname==='/api/profile-voice'){
+      const p=store.list('profiles').find(p=>p.id===data.id);if(!p)throw new Error('Perfil no encontrado.');
+      let voiceId=z.string().regex(/^[a-zA-Z0-9_-]{1,100}$/).parse(data.voiceId);
+      if(data.source==='library'){
+        const owner=z.string().regex(/^[a-zA-Z0-9_-]{1,128}$/).parse(data.ownerId),name=z.string().min(1).max(500).parse(data.voiceName),key=store.secrets().elevenKey;
+        if(!key)throw new Error('Guarda primero la clave de ElevenLabs.');
+        const r=await fetch(`https://api.elevenlabs.io/v1/voices/add/${owner}/${voiceId}`,{method:'POST',headers:{'xi-api-key':key,'Content-Type':'application/json'},body:JSON.stringify({new_name:name}),signal:AbortSignal.timeout(20000),redirect:'error'});
+        if(!r.ok)throw new Error(`ElevenLabs no permitió añadir la voz (${r.status}). Revisa permisos, plan o espacios de voces. Si ya la añadiste, elígela en «Mis voces».`);
+        voiceId=z.string().regex(/^[a-zA-Z0-9_-]{1,100}$/).parse((await r.json()).voice_id);
+      }
+      p.voiceId=voiceId;p.voiceName=typeof data.voiceName==='string'?data.voiceName.slice(0,500):'';store.db.prepare('UPDATE profiles SET data=? WHERE id=?').run(JSON.stringify(p),p.id);
+    }
     else if(url.pathname==='/api/assets'){const p=store.list('profiles').find(p=>p.id===data.profileId);if(!p)throw new Error('Perfil no encontrado.');if((p.assets||[]).length>=30)throw new Error('Este perfil ya tiene 30 imágenes.');const image=z.string().max(24000000).parse(data.image),match=/^data:image\/(png|jpeg|webp);base64,([A-Za-z0-9+/=\r\n]+)$/.exec(image);if(!match)throw new Error('Usa una imagen PNG, JPG o WebP.');const root=await requireStorage(p.assetsRoot||store.settings().storageRoot),folder=path.join(root,'assets');await mkdir(folder,{recursive:true});const buffer=Buffer.from(match[2],'base64'),decoder=sharp(buffer,{limitInputPixels:40000000}),metadata=await decoder.metadata();if(!['png','jpeg','webp'].includes(metadata.format))throw new Error('El archivo no es una imagen PNG, JPG o WebP válida.');const name=randomUUID()+'.png';await decoder.resize({width:1920,height:1920,fit:'inside',withoutEnlargement:true}).png().toFile(path.join(folder,name));p.assets=[...(p.assets||[]),name];p.assetsRoot=root;store.db.prepare('UPDATE profiles SET data=? WHERE id=?').run(JSON.stringify(p),p.id);}
     else if(url.pathname==='/api/run'){if(active.size||admitting)throw new Error('Hay una exportación activa. Esta versión procesa un trabajo a la vez.');admitting=true;try{const j=store.getJob(data.id);if(j.status==='ready')throw new Error('Este trabajo ya terminó.');await preflight(j);j.error=null;j.status='queued';store.saveJob(j);void run(j.id);}finally{admitting=false;}}
     else if(url.pathname==='/api/pause'){pauses.add(data.id);}

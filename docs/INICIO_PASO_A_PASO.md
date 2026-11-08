@@ -142,3 +142,11 @@ Los perfiles sirven para negocios, páginas y canales de entretenimiento, educac
 Después de guardar, cada clave muestra **Guardada en este equipo** en lugar de volver a mostrar su valor. No necesitas introducirla otra vez al abrir la aplicación. Pulsa **Cambiar** únicamente cuando quieras sustituirla; dejar el campo vacío conserva la anterior.
 
 El token de n8n también muestra su estado guardado, independientemente de si ya introdujiste la URL del workflow. **Copiar token guardado para n8n** recupera el mismo token: no lo regenera. Si sustituyes manualmente el token con **Cambiar**, actualiza también la credencial de n8n.
+
+## 11. Voces en español y español latino
+
+En **Perfiles y marcas → Elegir voz**, se abre la biblioteca de ElevenLabs con **Español latino** seleccionado. Puedes cambiar a **Todo el español**, elegir un país o seleccionar **Mis voces** para ver únicamente las que ya están en tu cuenta. Usa **Consultar más voces** para continuar la búsqueda: el catálogo tiene varias páginas.
+
+Los filtros usan etiquetas y variantes verificadas de ElevenLabs; una voz sin metadatos de acento latino no se presenta como latina. El acento final depende de la voz y el modelo. La consulta excluye voces de tarifa especial. Seleccionar **Añadir y asignar voz** añade esa voz a tu colección y la asigna al perfil, sujeto a permisos y espacios del plan. Esta acción no genera audio. Si la voz ya estaba añadida, puedes elegirla desde **Mis voces**.
+
+Referencia: [biblioteca de voces](https://elevenlabs.io/docs/api-reference/voices/voice-library/get-shared).
