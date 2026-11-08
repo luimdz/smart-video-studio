@@ -30,7 +30,7 @@ GitHub contiene una copia del código, no tus datos locales ni videos. No hay un
    ```
 
 4. Haz doble clic en **Iniciar Smart Studio.command**.
-5. Se abrirá una ventana de Terminal que mantiene el servicio funcionando. Déjala abierta.
+5. Se abrirá una ventana de Terminal que mantiene el servicio funcionando. Déjala abierta. Si ya hay un motor abierto, el acceso comprueba su versión: reutiliza la actual o reinicia una versión anterior cuando no hay producciones en curso. Si hay una producción activa, espera a que termine o páusala antes de actualizar.
 6. El navegador debería abrir Smart Studio. Si no lo hace, entra en:
 
    ```text
@@ -134,3 +134,5 @@ ElevenLabs informa el cargo por solicitud en la cabecera `character-cost`; si fa
 El historial real comienza con esta actualización. Las reservas antiguas se conservan y no se presentan como consumo confirmado. El mes local es calendario en Guatemala; la suscripción del proveedor puede tener otro ciclo. No se hicieron generaciones pagadas para verificar este panel.
 
 Referencias: [consumo y tokens de Gemini](https://ai.google.dev/gemini-api/docs/generate-content/tokens), [respuesta y costo de ElevenLabs](https://elevenlabs.io/docs/api-reference/introduction/), [saldo de suscripción](https://elevenlabs.io/docs/api-reference/user/subscription/get).
+
+Los perfiles sirven para negocios, páginas y canales de entretenimiento, educación y monetización por visualizaciones. El campo **Información del negocio, página o canal** permite describir propósito, temas, tono y objetivos.

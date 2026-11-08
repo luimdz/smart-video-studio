@@ -1,4 +1,6 @@
 import http from 'node:http';
+import { revision } from './revision.mjs';
+const runningRevision=await revision();
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { randomUUID, randomBytes } from 'node:crypto';
@@ -53,6 +55,8 @@ const server=http.createServer(async(req,res)=>{try{
   }
   if(!req.headers.cookie?.split(';').some(x=>x.trim()===`studio_session=${session}`)){json(res,401,{error:'Abre el estudio en este equipo para iniciar la sesión local.'});return;}
   if(req.method==='POST'&&(req.headers.origin!==origin||!req.headers['content-type']?.startsWith('application/json'))){json(res,403,{error:'Origen no permitido.'});return;}
+  if(req.method==='GET'&&url.pathname==='/api/runtime'){json(res,200,{revision:runningRevision,active:active.size||Number(admitting)});return;}
+  if(req.method==='POST'&&url.pathname==='/api/restart'){if(active.size||admitting)throw new Error('Hay una producción en curso. Termínala o páusala antes de actualizar.');json(res,200,{restarting:true});server.close(()=>process.exit(0));return;}
   if(req.method==='GET'&&url.pathname==='/api/state'){json(res,200,await state());return;}
   if(req.method==='GET'&&url.pathname==='/api/volumes'){let names=[];try{names=await readdir('/Volumes');}catch{}json(res,200,{volumes:await Promise.all(names.filter(n=>n!=='Recovery').map(n=>storageStatus(path.join('/Volumes',n))))});return;}
   if(req.method==='GET'&&url.pathname.startsWith('/api/jobs/')){const id=url.pathname.split('/')[3],j=store.getJob(id);json(res,200,{...j,audio:Object.fromEntries(Object.entries(j.audio).map(([k,a])=>[k,{duration:a.duration,voiceId:a.voiceId,model:a.model}])),root:j.root});return;}

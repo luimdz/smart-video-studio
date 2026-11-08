@@ -22,3 +22,9 @@ test('consumo real independiente de reservas, persistente e idempotente',t=>{
  const report=s.accounting();assert.equal(report.records.length,2);assert.equal(report.records[0].credits,350);assert.equal(report.reservations[0].amount,700);assert.equal(report.reservations[0].status,'settled');
  const reopened=createStore(dir);try{assert.equal(reopened.accounting().records[1].usage.totalTokenCount,130);}finally{reopened.db.close();}
 });
+test('perfiles guardan sin recortar textos largos en temática, audiencia y contexto',t=>{
+ const {s}=fixture(t),long='Historias educativas y entretenimiento para monetizar un canal. '.repeat(2500).trim();
+ const p=s.addProfile({name:'Canal educativo',niche:long,audience:long,brief:long});
+ const saved=s.list('profiles').find(x=>x.id===p.id);
+ for(const key of ['niche','audience','brief'])assert.equal(saved[key],long);
+});
