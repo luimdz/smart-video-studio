@@ -6,7 +6,9 @@ export async function requestGeneration(store,job,baseId,amount,request,{wait=sl
   const response=await request();
   if(response.ok)return {response,charge};
   const status=response.status;
-  if([400,401,403,404,422,429,503].includes(status))store.rejectGeneration(charge,status);
+  const failure=typeof response.json==='function'?await response.json().catch(()=>null):null;
+  const details=failure?.error?{code:failure.error.code,status:failure.error.status,message:String(failure.error.message||'').replace(/AIza[0-9A-Za-z_-]{20,}/g,'[clave oculta]').slice(0,2000),details:failure.error.details||[]}:null;
+  if([400,401,403,404,422,429,503].includes(status))store.rejectGeneration(charge,status,details);
   if(status===503){
    if(attempt<2){const delay=(attempt?5000:2000)+Math.floor(Math.random()*500);await onRetry({attempt:attempt+2,delay});await wait(delay);continue;}
    throw new Error('Gemini está temporalmente saturado o no disponible (503). Se intentó 3 veces. Tus avances están guardados; espera unos minutos y pulsa Producir para continuar.');

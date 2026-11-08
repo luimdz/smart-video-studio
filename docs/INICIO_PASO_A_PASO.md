@@ -180,3 +180,9 @@ Un HTTP 503 de Gemini indica indisponibilidad temporal o saturación del servici
 Cada HTTP 503 explícito queda registrado en `generation_failures`; se libera su reserva local, sin presentarlo como consumo confirmado. Esto no modifica facturas ni cuotas del proveedor. Un corte de red o tiempo de espera sin respuesta sigue dejando la reserva pendiente, porque no se conoce su resultado. No se cambia de modelo ni de tarifa automáticamente.
 
 Referencia: [errores de Gemini](https://ai.google.dev/gemini-api/docs/generate-content/api-errors).
+
+## 16. Compatibilidad del esquema y láminas de una escena
+
+El esquema enviado a Gemini conserva objetos, campos obligatorios y tipos, pero elimina límites numéricos y de tamaño de arrays del formato de generación para reducir su complejidad. Las validaciones completas se mantienen localmente al recibir la respuesta. Una lámina estática puede tener una sola escena.
+
+Los rechazos de Gemini incluyen ahora un registro técnico local en `generation_error_details`, asociado al intento rechazado, para diagnosticar su causa sin depender solo del código HTTP. No se sube a GitHub.
