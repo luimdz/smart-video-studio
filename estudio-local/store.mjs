@@ -29,6 +29,7 @@ export function createStore(root) {
   db.exec('PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON; CREATE TABLE IF NOT EXISTS profiles(id TEXT PRIMARY KEY,data TEXT NOT NULL); CREATE TABLE IF NOT EXISTS jobs(id TEXT PRIMARY KEY,request_key TEXT UNIQUE NOT NULL,data TEXT NOT NULL); CREATE TABLE IF NOT EXISTS settings(id TEXT PRIMARY KEY,data TEXT NOT NULL); CREATE TABLE IF NOT EXISTS charges(id TEXT PRIMARY KEY,job_id TEXT NOT NULL,period TEXT NOT NULL,kind TEXT NOT NULL,amount INTEGER NOT NULL,status TEXT NOT NULL);');
   db.exec('CREATE TABLE IF NOT EXISTS consumption(id TEXT PRIMARY KEY,job_id TEXT NOT NULL,period TEXT NOT NULL,data TEXT NOT NULL)');
   db.exec('CREATE TABLE IF NOT EXISTS media(id TEXT PRIMARY KEY,data TEXT NOT NULL)');
+  db.exec('CREATE TABLE IF NOT EXISTS generation_responses(id TEXT PRIMARY KEY,data TEXT NOT NULL)');
   const keyFile=path.join(root,'key');
   if(!existsSync(keyFile))writeFileSync(keyFile,randomBytes(32),{mode:0o600});
   const key=readFileSync(keyFile);
@@ -57,6 +58,9 @@ export function createStore(root) {
       const row=db.prepare(`INSERT INTO charges(id,job_id,period,kind,amount,status) SELECT ?,?,?,?,?,'reserved' WHERE NOT EXISTS(SELECT 1 FROM charges WHERE id=?) AND COALESCE((SELECT sum(amount) FROM charges WHERE period=? AND kind=?),0)+?<=? AND COALESCE((SELECT sum(amount) FROM charges WHERE job_id=? AND kind=?),0)+?<=?`).run(chargeId,jobId,p,kind,amount,chargeId,p,kind,amount,limit,jobId,kind,amount,kind==='voice'?job.maxCredits:limit);
       if(!row.changes)throw new Error('Se alcanzó el límite de consumo, o esta llamada ya está reservada.');return chargeId;
     },
+    generationResponse(id){const row=db.prepare('SELECT data FROM generation_responses WHERE id=?').get(id);return row?JSON.parse(row.data):null;},
+    saveGenerationResponse(id,data){db.prepare('INSERT OR REPLACE INTO generation_responses VALUES(?,?)').run(id,JSON.stringify(data));},
+    generationCharge(id){const rows=db.prepare('SELECT id,status FROM charges WHERE id=? OR substr(id,1,?)=?').all(id,(id+':attempt:').length,id+':attempt:');if(rows.some(r=>r.status==='reserved'))throw new Error('Esta etapa tiene una llamada de resultado incierto. Revisa el proveedor antes de repetir.');return rows.length?id+':attempt:'+String(rows.length+1):id;},
     recordConsumption(id,jobId,data){db.prepare('INSERT OR IGNORE INTO consumption VALUES(?,?,?,?)').run(id,jobId,period(),JSON.stringify({...data,at:new Date().toISOString()}));},
     consumption(){return db.prepare('SELECT id,job_id,period,data FROM consumption').all().map(r=>({id:r.id,jobId:r.job_id,period:r.period,...JSON.parse(r.data)}));},
     accounting(){return {period:period(),records:this.consumption(),reservations:db.prepare("SELECT job_id AS jobId,kind,status,sum(amount) AS amount FROM charges WHERE period=? GROUP BY job_id,kind,status").all(period()),pricing:settings().pricing||{},subscription:settings().elevenSubscription||null};},

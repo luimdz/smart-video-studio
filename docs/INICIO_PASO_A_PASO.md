@@ -166,3 +166,9 @@ Para cartas y poesía, selecciona **Lámina estática · carta o poesía**. Pued
 Después de elegir una voz, pulsa **Guardar voz para este perfil**. La aplicación confirma el guardado y muestra el nombre de la voz en la tarjeta. Al abrir de nuevo el selector también aparece **Voz actual del perfil**. Si la voz de biblioteca ya se añadió a tu cuenta, se reutiliza su identificador guardado sin intentar añadirla otra vez. El guardado se conserva al reiniciar; no genera audio.
 
 Cada imagen adjunta tiene un botón **Quitar**. También puedes usar **Quitar todas**; estas acciones conservan el texto y las demás opciones del formulario. El contador muestra cuántas referencias seleccionaste (máximo 20). Más referencias implican mayor consumo de tokens al producir.
+
+## 14. Recuperación del plan y respuestas de Gemini
+
+La generación solicita un esquema JSON explícito. Si el plan llega como una lista válida de capítulos, se normaliza al objeto esperado sin eliminar capítulos. Las respuestas nuevas se guardan localmente antes de validarlas: al reanudar esa etapa se reutilizan y no se repite la llamada. Una respuesta inválida o incompleta se detiene con un mensaje en español; no se regenera automáticamente.
+
+Las respuestas fallidas anteriores a esta mejora no pueden recuperarse si no se guardaron. Al reanudar, se conserva la ficha ya creada y se permite un nuevo intento de la etapa fallida; el consumo anterior permanece en el historial. Las llamadas con resultado incierto continúan bloqueadas para evitar cobros duplicados.
