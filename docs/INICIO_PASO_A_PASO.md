@@ -136,3 +136,9 @@ El historial real comienza con esta actualización. Las reservas antiguas se con
 Referencias: [consumo y tokens de Gemini](https://ai.google.dev/gemini-api/docs/generate-content/tokens), [respuesta y costo de ElevenLabs](https://elevenlabs.io/docs/api-reference/introduction/), [saldo de suscripción](https://elevenlabs.io/docs/api-reference/user/subscription/get).
 
 Los perfiles sirven para negocios, páginas y canales de entretenimiento, educación y monetización por visualizaciones. El campo **Información del negocio, página o canal** permite describir propósito, temas, tono y objetivos.
+
+## 10. Las conexiones se conservan
+
+Después de guardar, cada clave muestra **Guardada en este equipo** en lugar de volver a mostrar su valor. No necesitas introducirla otra vez al abrir la aplicación. Pulsa **Cambiar** únicamente cuando quieras sustituirla; dejar el campo vacío conserva la anterior.
+
+El token de n8n también muestra su estado guardado, independientemente de si ya introdujiste la URL del workflow. **Copiar token guardado para n8n** recupera el mismo token: no lo regenera. Si sustituyes manualmente el token con **Cambiar**, actualiza también la credencial de n8n.

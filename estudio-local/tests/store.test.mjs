@@ -28,3 +28,16 @@ test('perfiles guardan sin recortar textos largos en temática, audiencia y cont
  const saved=s.list('profiles').find(x=>x.id===p.id);
  for(const key of ['niche','audience','brief'])assert.equal(saved[key],long);
 });
+test('claves y token sobreviven reinicios y guardar campos vacíos conserva los existentes',t=>{
+ const {s,dir}=fixture(t),expected={geminiKey:'fake-gemini',elevenKey:'fake-eleven',n8nToken:'fake-stable-token'};
+ s.saveSettings({n8nUrl:'https://n8n.planifyx.com/webhook/test'},expected);
+ s.saveSettings({monthlyCredits:25000},{geminiKey:'',elevenKey:'   ',n8nToken:''});
+ const reopened=createStore(dir);
+ try{
+  assert.deepEqual(reopened.secrets(),expected);
+  reopened.saveSettings({monthlyCredits:24000});assert.deepEqual(reopened.secrets(),expected);
+  reopened.saveSettings({},{geminiKey:'replacement'});
+  assert.deepEqual(reopened.secrets(),{...expected,geminiKey:'replacement'});
+  assert.equal(JSON.stringify(reopened.settings()).includes('fake-'),false);
+ }finally{reopened.db.close();}
+});

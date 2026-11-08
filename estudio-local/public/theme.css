@@ -13,3 +13,5 @@ nav button{color:#9aabc7}nav button:hover{background:#ffffff05;color:#f1f5ff}nav
 @media(max-width:800px){.setup-banner{align-items:start;flex-direction:column}.hero{background:radial-gradient(ellipse at 90% 0,#5d32c52a,transparent 80%),linear-gradient(125deg,#13273a9c,#14152c99)}}
 
 .cost-table{width:100%;border-collapse:collapse;text-align:left}.cost-table th,.cost-table td{padding:14px 12px;border-bottom:1px solid rgba(148,163,184,.18);vertical-align:top}.cost-table th{color:var(--muted,#94a3b8);font-size:12px}
+[hidden]{display:none!important}
+[data-secret-area] input{width:100%;margin:8px 0}
