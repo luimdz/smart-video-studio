@@ -1,0 +1,434 @@
+{
+  "name": "Serie · 01 Planificar temporada completa",
+  "nodes": [
+    {
+      "id": "ea48eb4e-6ec5-4c6d-a955-021ecd1bc513",
+      "name": "Solicitud de temporada",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.2,
+      "position": [
+        0,
+        96
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "serie-produccion",
+        "authentication": "headerAuth",
+        "responseMode": "onReceived",
+        "options": {
+          "responseCode": {
+            "values": {
+              "responseCode": "customCode",
+              "customCode": 202
+            }
+          }
+        }
+      },
+      "webhookId": "f20daef4-2a0d-4283-ba38-a616eeaeaa5d"
+    },
+    {
+      "id": "a8bc7386-5f75-429e-b9ea-c1350b707060",
+      "name": "Configurar estudio",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        272,
+        224
+      ],
+      "parameters": {
+        "mode": "manual",
+        "assignments": {
+          "assignments": [
+            {
+              "id": "studio-url",
+              "name": "studioUrl",
+              "value": "",
+              "type": "string"
+            },
+            {
+              "id": "production-id",
+              "name": "productionId",
+              "value": "={{ $json.body?.productionId ?? $json.productionId ?? \"\" }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "bd7b76c4-7d37-423b-9ff7-e8368ea153d3",
+      "name": "¿Configuración y solicitud válidas?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        496,
+        224
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "valid-url",
+              "leftValue": "={{ $json.studioUrl.startsWith(\"https://\") && $json.studioUrl.length > 8 && !$json.studioUrl.includes(\"?\") && !$json.studioUrl.includes(\"#\") && !$json.studioUrl.includes(\"@\") }}",
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              },
+              "rightValue": true
+            },
+            {
+              "id": "valid-id",
+              "leftValue": "={{ /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test($json.productionId) }}",
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              },
+              "rightValue": true
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "21ad4b1b-781f-4a4b-bdd9-faa41e182e86",
+      "name": "Reservar ejecución",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        800,
+        544
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $(\"Configurar estudio\").first().json.studioUrl.replace(/[/]$/, \"\") + \"/api/worker\" }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpTemplatedCustomAuth",
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({action:\"claim\",productionId:$(\"Configurar estudio\").first().json.productionId,executionId:$execution.id}) }}",
+        "options": {
+          "timeout": 90000,
+          "redirect": {
+            "redirect": {
+              "followRedirects": false
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "0d26006f-0568-4022-b535-a4ff8f910688",
+      "name": "Detener por configuración pendiente",
+      "type": "n8n-nodes-base.stopAndError",
+      "typeVersion": 1,
+      "position": [
+        912,
+        0
+      ],
+      "parameters": {
+        "errorType": "errorMessage",
+        "errorMessage": "Configura la URL HTTPS real del estudio y envía un productionId UUID válido. No hay un despliegue del estudio confirmado."
+      }
+    },
+    {
+      "id": "f8a3f2d0-2c25-49b8-a86f-61a1735fd707",
+      "name": "¿Ejecución autorizada?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1024,
+        544
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "proceed",
+              "leftValue": "={{ $json.proceed }}",
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              },
+              "rightValue": true
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "a26ddee6-2a07-4320-b7d7-534b5262d348",
+      "name": "Planificar siguiente etapa",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        1248,
+        448
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $(\"Configurar estudio\").first().json.studioUrl.replace(/[/]$/, \"\") + \"/api/worker\" }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpTemplatedCustomAuth",
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({action:\"next\",productionId:$(\"Configurar estudio\").first().json.productionId,executionId:$execution.id}) }}",
+        "options": {
+          "timeout": 90000,
+          "redirect": {
+            "redirect": {
+              "followRedirects": false
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "892244f5-ff4b-427b-a945-e2e6dd9df3ff",
+      "name": "Solicitud ya reclamada · no repetir",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1248,
+        640
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "b35f4800-be5c-4a6e-ad2b-395341ca5757",
+      "name": "¿Guiones completos?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1472,
+        368
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "done",
+              "leftValue": "={{ $json.done }}",
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              },
+              "rightValue": true
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "7be76a0e-02d9-426c-841b-93d75a95f439",
+      "name": "Guiones listos · audiovisual pendiente",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1696,
+        320
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "2c940264-8987-4836-b6e6-36c58cfd181d",
+      "name": "Pausa entre etapas",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        1696,
+        544
+      ],
+      "parameters": {
+        "resume": "timeInterval",
+        "amount": 2,
+        "unit": "seconds"
+      },
+      "webhookId": "574b44b1-096d-49d0-9db3-fed3c2cacaf7"
+    },
+    {
+      "id": "01562f29-0f69-4071-b293-0bc56817964d",
+      "name": "Sticky Note 3ed84b66",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        784,
+        640
+      ],
+      "parameters": {
+        "content": "## Borrador · conexiones pendientes\nConfigura studioUrl en «Configurar estudio» con la dirección HTTPS real del servicio /api/worker.\nCredenciales pendientes: Entrada n8n (X-Studio-Token) y Servicio privado (Bearer WORKER_TOKEN; acceso al alojamiento si corresponde).\nEl servicio necesita Gemini y su almacenamiento. No se confirmó ningún despliegue.\nFicha → arco → todos los guiones → revisión y correcciones. scripts_ready no es un video terminado. Voz, imágenes, render y publicación Meta siguen pendientes.\nLos ejemplos de salida describen el contrato; no son resultados ejecutados."
+      }
+    }
+  ],
+  "connections": {
+    "Solicitud de temporada": {
+      "main": [
+        [
+          {
+            "node": "Configurar estudio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Configurar estudio": {
+      "main": [
+        [
+          {
+            "node": "¿Configuración y solicitud válidas?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Configuración y solicitud válidas?": {
+      "main": [
+        [
+          {
+            "node": "Reservar ejecución",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Detener por configuración pendiente",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reservar ejecución": {
+      "main": [
+        [
+          {
+            "node": "¿Ejecución autorizada?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Ejecución autorizada?": {
+      "main": [
+        [
+          {
+            "node": "Planificar siguiente etapa",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Solicitud ya reclamada · no repetir",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Planificar siguiente etapa": {
+      "main": [
+        [
+          {
+            "node": "¿Guiones completos?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Guiones completos?": {
+      "main": [
+        [
+          {
+            "node": "Guiones listos · audiovisual pendiente",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pausa entre etapas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pausa entre etapas": {
+      "main": [
+        [
+          {
+            "node": "Planificar siguiente etapa",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "nodeGroups": [
+    {
+      "id": "c12b9175-0f55-400d-b8f3-9038b0594b31",
+      "name": "Entrada y configuración",
+      "nodeNames": [
+        "Configurar estudio",
+        "¿Configuración y solicitud válidas?"
+      ],
+      "description": "Comprueba la dirección del estudio y el identificador antes de llamar al servicio."
+    },
+    {
+      "id": "9ce4b2cf-41c9-4ccb-87dd-32e255cb981a",
+      "name": "Planificación de temporada",
+      "nodeNames": [
+        "Reservar ejecución",
+        "¿Ejecución autorizada?",
+        "Solicitud ya reclamada · no repetir",
+        "Planificar siguiente etapa",
+        "¿Guiones completos?",
+        "Pausa entre etapas",
+        "Guiones listos · audiovisual pendiente"
+      ],
+      "description": "Reclama la solicitud y avanza por ficha, arco, guiones y revisión hasta scripts_ready."
+    }
+  ],
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true,
+    "timezone": "America/Guatemala",
+    "saveManualExecutions": true,
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "none",
+    "executionTimeout": 3600
+  },
+  "pinData": {},
+  "tags": []
+}

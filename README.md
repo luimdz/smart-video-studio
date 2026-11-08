@@ -19,7 +19,7 @@ Los videos, imágenes de producción, bases locales, claves y cachés no se sube
 
 En el equipo donde se está desarrollando, abrir con doble clic `estudio-local/Iniciar Smart Studio.command`. Mantener abierta la ventana que inicia el servicio y entrar a `http://127.0.0.1:4317/`.
 
-En una copia nueva del repositorio, se necesitan Node.js 22.13 o posterior y FFmpeg/ffprobe. Dentro de `estudio-local`, ejecutar `npm install` y luego `npm start`.
+En una copia nueva del repositorio, se necesitan Node.js 22.13 o posterior y FFmpeg/ffprobe. Dentro de `estudio-local`, ejecutar `npm ci` y luego `npm start`.
 
 **Configuración está dentro de Smart Studio**, en el menú lateral izquierdo, junto al icono de engranaje. No es la configuración de Codex, GitHub o n8n.
 
@@ -29,7 +29,9 @@ Comprobado: interfaz local, perfiles, guardado de solicitudes, límites y duplic
 
 Pendiente: configurar claves reales, voz del perfil y autenticación del webhook; probar una producción completa; personajes 2D avanzados; publicación Facebook/Instagram; alojamiento remoto y subdominio. El primer render usa una ilustración básica y un tono de prueba; no representa todavía el acabado audiovisual final.
 
-La interfaz está en revisión visual. Se está recuperando la paleta de Smart Growth Online para aplicar el estilo solicitado: premium, glass y acentos neón, con prioridad en la facilidad de uso.
+La interfaz utiliza la dirección visual recuperada de Smart Growth Online / Synapse: fondo azul noche, paneles glass y acentos teal, azul eléctrico y violeta. Los valores de implementación y su origen están en [Diseño](docs/DISENO.md). El acabado se seguirá revisando con el propietario.
+
+![Interfaz del estudio](docs/images/estudio-inicio.jpg)
 
 ## Despliegue posterior
 

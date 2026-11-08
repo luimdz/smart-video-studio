@@ -1,0 +1,5 @@
+.state/
+outputs/
+node_modules/
+.env*
+*.log

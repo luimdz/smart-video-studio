@@ -1,0 +1,162 @@
+{
+  "name": "Smart Studio · 00 Coordinación local",
+  "nodes": [
+    {
+      "id": "d492b36c-cff4-4523-8a7f-468e2666e3b1",
+      "name": "Estado desde el Mac",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.2,
+      "position": [
+        0,
+        96
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "smart-studio-coordinar",
+        "authentication": "headerAuth",
+        "responseMode": "lastNode",
+        "responseData": "firstEntryJson",
+        "options": {}
+      },
+      "webhookId": "b16ca96a-3584-44ee-8db7-752f10d00454"
+    },
+    {
+      "id": "44157658-c248-4b85-a18e-285f0fd9498f",
+      "name": "¿Estado válido?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        224,
+        96
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ /^[0-9a-f-]{36}$/i.test($json.body?.productionId ?? \"\") && Number.isInteger($json.body?.totalEpisodes) && $json.body.totalEpisodes >= 1 && $json.body.totalEpisodes <= 25 && [\"writtenEpisodes\",\"voicedEpisodes\",\"renderedEpisodes\"].every(k => Number.isInteger($json.body[k]) && $json.body[k] >= 0 && $json.body[k] <= $json.body.totalEpisodes) && [\"hasBible\",\"hasOutline\",\"correctionPending\",\"reviewPassed\"].every(k => typeof $json.body[k] === \"boolean\") }}",
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              },
+              "rightValue": true
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "897a1e7c-4830-4953-823f-81545cbee8c5",
+      "name": "Decidir siguiente etapa",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        448,
+        0
+      ],
+      "parameters": {
+        "mode": "manual",
+        "assignments": {
+          "assignments": [
+            {
+              "id": "production",
+              "name": "productionId",
+              "type": "string",
+              "value": "={{ $json.body.productionId }}"
+            },
+            {
+              "id": "version",
+              "name": "protocolVersion",
+              "type": "number",
+              "value": 1
+            },
+            {
+              "id": "action",
+              "name": "action",
+              "type": "string",
+              "value": "={{ !$json.body.hasBible ? \"bible\" : !$json.body.hasOutline ? \"outline\" : $json.body.writtenEpisodes < $json.body.totalEpisodes ? \"script\" : $json.body.correctionPending ? \"correct\" : !$json.body.reviewPassed ? \"review\" : $json.body.voicedEpisodes < $json.body.totalEpisodes ? \"voice\" : $json.body.renderedEpisodes < $json.body.totalEpisodes ? \"render\" : \"complete\" }}"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "15673a8d-5ff8-4168-8734-c0c0b6966bfc",
+      "name": "Detener solicitud inválida",
+      "type": "n8n-nodes-base.stopAndError",
+      "typeVersion": 1,
+      "position": [
+        448,
+        192
+      ],
+      "parameters": {
+        "errorType": "errorMessage",
+        "errorMessage": "El estado recibido no cumple el contrato Smart Studio v1."
+      }
+    },
+    {
+      "id": "dc77c809-382e-42bb-8903-188be441e44e",
+      "name": "Sticky Note b500bf53",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        160,
+        192
+      ],
+      "parameters": {
+        "content": "## Coordinación local · contrato v1\nEl Mac llama a este webhook con estados y contadores. n8n decide la próxima etapa; el Mac conserva la biblioteca y ejecuta Gemini, ElevenLabs y FFmpeg. No recibe medios ni claves de proveedores.\nConfigurar Header Auth: nombre X-Studio-Token, valor igual al token guardado en la UI local. Publicar solo después de asignar la credencial.\nEtapas: ficha, arco, todos los guiones, correcciones y revisión; después voces, render y complete. complete significa audiovisuales locales listos, no publicaciones Meta.\nSin sondeos inactivos: una llamada por transición, iniciada desde el Mac. El servicio local valida la instrucción y mantiene presupuestos y resultados."
+      }
+    }
+  ],
+  "connections": {
+    "Estado desde el Mac": {
+      "main": [
+        [
+          {
+            "node": "¿Estado válido?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Estado válido?": {
+      "main": [
+        [
+          {
+            "node": "Decidir siguiente etapa",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Detener solicitud inválida",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "nodeGroups": [],
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true,
+    "timezone": "America/Guatemala",
+    "saveManualExecutions": false,
+    "saveDataErrorExecution": "none",
+    "saveDataSuccessExecution": "none",
+    "executionTimeout": 60
+  },
+  "pinData": {},
+  "tags": []
+}

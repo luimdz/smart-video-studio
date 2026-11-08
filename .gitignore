@@ -1,0 +1,33 @@
+# Runtime local, medios y claves
+**/node_modules/
+**/.state/
+**/outputs/
+**/.env*
+!**/.env.example
+**/.dev.vars*
+**/*.pem
+**/*.sqlite*
+**/*.db
+**/*.mp4
+**/*.mov
+**/*.mp3
+**/*.wav
+
+# Compilaciones y herramientas locales
+**/dist/
+**/.next/
+**/.vinext/
+**/.wrangler/
+**/.sites-runtime/
+**/.openai/
+**/.codex/
+**/.agents/
+**/.cache/
+**/.npm-cache/
+**/coverage/
+**/work/
+**/__pycache__/
+**/*.tsbuildinfo
+**/*.log
+**/*.zip
+**/.DS_Store
