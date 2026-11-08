@@ -15,3 +15,14 @@ test('biblioteca consulta español y excluye tarifas especiales, con paginación
 test('mis voces incluye variantes verificadas en español y conserva cursor',async()=>{
  const b=await listVoices('fake',{source:'account',region:'all',cursor:'next'},async url=>{assert.equal(url.searchParams.get('next_page_token'),'next');return {ok:true,json:async()=>({voices:[{voice_id:'v',labels:{language:'en'},verified_languages:[{language:'es',accent:'colombian'}]}],has_more:false})};});assert.equal(b.voices.length,1);assert.equal(b.voices[0].latam,true);
 });
+
+test('una voz de biblioteca ya añadida se reutiliza sin intentar añadirla de nuevo',async()=>{
+ const {resolveLibraryVoice}=await import('../voices.mjs');let calls=0;
+ const selected=await resolveLibraryVoice('fake',{voiceId:'original',ownerId:'owner',name:'Elegida'},async(url,opts)=>{calls++;assert.equal(opts.method,undefined);return {ok:true,json:async()=>({voices:[{voice_id:'saved',name:'Mi voz',sharing:{original_voice_id:'original',public_owner_id:'owner'}}]})};});
+ assert.equal(selected.id,'saved');assert.equal(calls,1);
+});
+test('se conserva el ID devuelto por ElevenLabs al añadir una voz',async()=>{
+ const {resolveLibraryVoice}=await import('../voices.mjs');let adds=0;
+ const selected=await resolveLibraryVoice('fake',{voiceId:'original',ownerId:'owner',name:'Elegida'},async(url,opts)=>{if(opts.method==='POST'){adds++;return {ok:true,json:async()=>({voice_id:'account-copy'})};}return {ok:true,json:async()=>({voices:[]})};});
+ assert.equal(selected.id,'account-copy');assert.equal(adds,1);
+});

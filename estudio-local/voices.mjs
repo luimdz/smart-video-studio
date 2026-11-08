@@ -22,3 +22,19 @@ export async function listVoices(key,{source='library',region='latam',search='',
  const voices=mapped.filter(v=>v.spanish&&(region==='all'||(region==='latam'?v.latam:v.locales.some(l=>l.toLowerCase()===region.toLowerCase())))).sort((a,b)=>Number(b.latam)-Number(a.latam)||a.name.localeCompare(b.name,'es'));
  return {voices,hasMore:!!b.has_more,nextCursor:b.next_page_token||'',page,source};
 }
+
+export async function resolveLibraryVoice(key,{voiceId,ownerId,name},request=fetch){
+ async function existing(){let cursor='';const seen=new Set();do{
+  const url=new URL('https://api.elevenlabs.io/v2/voices');url.searchParams.set('page_size','100');if(cursor)url.searchParams.set('next_page_token',cursor);
+  const r=await request(url,{headers:{'xi-api-key':key},signal:AbortSignal.timeout(20000),redirect:'error'});
+  if(!r.ok)throw Error(`No se pudo comprobar la colección de voces (${r.status}). Revisa el permiso de lectura de voces.`);
+  const b=await r.json(),found=(b.voices||[]).find(v=>v.voice_id===voiceId||(v.sharing?.original_voice_id===voiceId&&v.sharing?.public_owner_id===ownerId));
+  if(found)return {id:found.voice_id,name:found.name||name};
+  cursor=b.has_more?b.next_page_token:'';if(cursor&&seen.has(cursor))throw Error('ElevenLabs repitió una página de voces. Vuelve a intentarlo.');if(cursor)seen.add(cursor);
+ }while(cursor);return null;}
+ const saved=await existing();if(saved)return saved;
+ const r=await request(`https://api.elevenlabs.io/v1/voices/add/${ownerId}/${voiceId}`,{method:'POST',headers:{'xi-api-key':key,'Content-Type':'application/json'},body:JSON.stringify({new_name:name}),signal:AbortSignal.timeout(20000),redirect:'error'});
+ if(!r.ok){const saved=await existing();if(saved)return saved;throw Error(`ElevenLabs no permitió añadir la voz (${r.status}). No se cambió la voz del perfil. Revisa permisos, plan y espacios de voces, o selecciona una de «Mis voces».`);}
+ const body=await r.json();if(!/^[a-zA-Z0-9_-]{1,100}$/.test(body.voice_id||''))throw Error('ElevenLabs no devolvió el identificador de la voz. Búscala en «Mis voces» para asignarla.');
+ return {id:body.voice_id,name};
+}

@@ -1,5 +1,5 @@
 import http from 'node:http';
-import {listVoices} from './voices.mjs';
+import {listVoices,resolveLibraryVoice} from './voices.mjs';
 import { revision } from './revision.mjs';
 const runningRevision=await revision();
 import path from 'node:path';
@@ -9,7 +9,7 @@ import { mkdir, readFile, writeFile, stat, readdir, realpath, access } from 'nod
 import { createReadStream } from 'node:fs';
 import { createStore, nextAction } from './store.mjs';
 import { planningStep, voiceStep } from './planner.mjs';
-import { renderEpisode, storageStatus, requireStorage, processFile } from './render.mjs';
+import { renderEpisode, storageStatus, requireStorage, processFile, letterOverlay } from './render.mjs';
 import { z, sharp } from './deps.mjs';
 
 const here=path.dirname(fileURLToPath(import.meta.url));
@@ -31,7 +31,7 @@ async function coordinate(j){
   const raw=await r.json(),result=Array.isArray(raw)?raw[0]:raw;
   if(result.productionId!==j.id||result.protocolVersion!==1||result.action!==nextAction(j))throw new Error('n8n devolvió una instrucción fuera del contrato esperado.');return result.action;
 }
-async function preflight(j){const c=store.settings(),s=store.secrets(),p=store.list('profiles').find(p=>p.id===j.profileId);await requireStorage(c.storageRoot);if(!s.geminiKey||!s.elevenKey)throw new Error('Configura las claves de Gemini y ElevenLabs.');if(!p?.voiceId)throw new Error('Selecciona una voz para este perfil.');if(!c.n8nUrl||!s.n8nToken)throw new Error('Configura el workflow coordinador de n8n.');if(store.interruptedCharges(j.id).length)throw new Error('Hay una llamada de resultado incierto. Revisa el proveedor antes de repetir; la aplicación no volverá a cobrarla automáticamente.');}
+async function preflight(j){const c=store.settings(),s=store.secrets(),p=store.list('profiles').find(p=>p.id===j.profileId);await requireStorage(c.storageRoot);for(const image of [...(j.referenceImages||[]),...(j.useLogo&&j.logo?[j.logo]:[])]){try{await access(image.file);}catch{throw new Error('No se encuentra una imagen adjunta. Conecta el disco donde la guardaste antes de producir.');}}if(j.style==='static'&&j.staticText?.trim())letterOverlay(j.staticText);if(!s.geminiKey||!s.elevenKey)throw new Error('Configura las claves de Gemini y ElevenLabs.');if(!p?.voiceId)throw new Error('Selecciona una voz para este perfil.');if(!c.n8nUrl||!s.n8nToken)throw new Error('Configura el workflow coordinador de n8n.');if(store.interruptedCharges(j.id).length)throw new Error('Hay una llamada de resultado incierto. Revisa el proveedor antes de repetir; la aplicación no volverá a cobrarla automáticamente.');}
 async function run(id){let j=store.getJob(id);active.add(id);pauses.delete(id);try{
   j.status='running';j.root=j.root||await requireStorage(store.settings().storageRoot);record(j,'Producción iniciada. Las voces se generan después de revisar todos los guiones.');
   while(true){if(pauses.has(id)){j.status='paused';record(j,'Pausada después de guardar la etapa actual.');break;}
@@ -65,7 +65,7 @@ const server=http.createServer(async(req,res)=>{try{
   if(req.method==='POST'){
     const data=await body(req);
     if(url.pathname==='/api/profiles')store.addProfile(data);
-    else if(url.pathname==='/api/jobs')store.addJob(data);
+    else if(url.pathname==='/api/jobs'){if(data.style==='static'&&typeof data.staticText==='string'&&data.staticText.trim())letterOverlay(data.staticText);store.addJob(data);}
     else if(url.pathname==='/api/settings'){
       const config=z.object({storageRoot:z.string().min(1).max(1000),voiceModel:z.enum(['eleven_flash_v2_5','eleven_multilingual_v2']),monthlyCredits:z.number().int().min(100).max(30000),n8nUrl:z.union([z.literal(''),z.string().url()]),useN8n:z.boolean().default(true)}).parse(data);
       if(active.size)throw new Error('Espera a que termine el trabajo antes de cambiar la configuración.');
@@ -90,15 +90,22 @@ const server=http.createServer(async(req,res)=>{try{
     }
     else if(url.pathname==='/api/profile-voice'){
       const p=store.list('profiles').find(p=>p.id===data.id);if(!p)throw new Error('Perfil no encontrado.');
-      let voiceId=z.string().regex(/^[a-zA-Z0-9_-]{1,100}$/).parse(data.voiceId);
+      let voiceId=z.string().regex(/^[a-zA-Z0-9_-]{1,100}$/).parse(data.voiceId),voiceName=z.string().max(500).default('').parse(data.voiceName);
       if(data.source==='library'){
-        const owner=z.string().regex(/^[a-zA-Z0-9_-]{1,128}$/).parse(data.ownerId),name=z.string().min(1).max(500).parse(data.voiceName),key=store.secrets().elevenKey;
+        const ownerId=z.string().regex(/^[a-zA-Z0-9_-]{1,128}$/).parse(data.ownerId),key=store.secrets().elevenKey;
         if(!key)throw new Error('Guarda primero la clave de ElevenLabs.');
-        const r=await fetch(`https://api.elevenlabs.io/v1/voices/add/${owner}/${voiceId}`,{method:'POST',headers:{'xi-api-key':key,'Content-Type':'application/json'},body:JSON.stringify({new_name:name}),signal:AbortSignal.timeout(20000),redirect:'error'});
-        if(!r.ok)throw new Error(`ElevenLabs no permitió añadir la voz (${r.status}). Revisa permisos, plan o espacios de voces. Si ya la añadiste, elígela en «Mis voces».`);
-        voiceId=z.string().regex(/^[a-zA-Z0-9_-]{1,100}$/).parse((await r.json()).voice_id);
+        const chosen=await resolveLibraryVoice(key,{voiceId,ownerId,name:voiceName});voiceId=chosen.id;voiceName=chosen.name;
       }
-      p.voiceId=voiceId;p.voiceName=typeof data.voiceName==='string'?data.voiceName.slice(0,500):'';store.db.prepare('UPDATE profiles SET data=? WHERE id=?').run(JSON.stringify(p),p.id);
+      store.assignVoice(p.id,voiceId,voiceName);
+    }
+    else if(url.pathname==='/api/media'){
+      const kind=z.enum(['logo','reference']).parse(data.kind),image=z.string().max(24000000).parse(data.image),match=/^data:image\/(png|jpeg|webp);base64,([A-Za-z0-9+/=\r\n]+)$/.exec(image);
+      if(!match)throw new Error('Adjunta una imagen PNG, JPG o WebP.');
+      const buffer=Buffer.from(match[2],'base64'),decoder=sharp(buffer,{limitInputPixels:40000000}),meta=await decoder.metadata();
+      if(!['png','jpeg','webp'].includes(meta.format)||(kind==='logo'&&meta.format!=='png'))throw new Error('El logo debe ser un PNG válido. Para referencias usa PNG, JPG o WebP.');
+      const root=await requireStorage(store.settings().storageRoot),folder=path.join(root,'assets');await mkdir(folder,{recursive:true});const file=path.join(folder,randomUUID()+'.png');
+      await decoder.rotate().resize({width:kind==='logo'?800:1920,height:kind==='logo'?800:1920,fit:'inside',withoutEnlargement:true}).png().toFile(file);
+      json(res,200,{id:store.addMedia({kind,file})});return;
     }
     else if(url.pathname==='/api/assets'){const p=store.list('profiles').find(p=>p.id===data.profileId);if(!p)throw new Error('Perfil no encontrado.');if((p.assets||[]).length>=30)throw new Error('Este perfil ya tiene 30 imágenes.');const image=z.string().max(24000000).parse(data.image),match=/^data:image\/(png|jpeg|webp);base64,([A-Za-z0-9+/=\r\n]+)$/.exec(image);if(!match)throw new Error('Usa una imagen PNG, JPG o WebP.');const root=await requireStorage(p.assetsRoot||store.settings().storageRoot),folder=path.join(root,'assets');await mkdir(folder,{recursive:true});const buffer=Buffer.from(match[2],'base64'),decoder=sharp(buffer,{limitInputPixels:40000000}),metadata=await decoder.metadata();if(!['png','jpeg','webp'].includes(metadata.format))throw new Error('El archivo no es una imagen PNG, JPG o WebP válida.');const name=randomUUID()+'.png';await decoder.resize({width:1920,height:1920,fit:'inside',withoutEnlargement:true}).png().toFile(path.join(folder,name));p.assets=[...(p.assets||[]),name];p.assetsRoot=root;store.db.prepare('UPDATE profiles SET data=? WHERE id=?').run(JSON.stringify(p),p.id);}
     else if(url.pathname==='/api/run'){if(active.size||admitting)throw new Error('Hay una exportación activa. Esta versión procesa un trabajo a la vez.');admitting=true;try{const j=store.getJob(data.id);if(j.status==='ready')throw new Error('Este trabajo ya terminó.');await preflight(j);j.error=null;j.status='queued';store.saveJob(j);void run(j.id);}finally{admitting=false;}}

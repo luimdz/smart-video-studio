@@ -41,3 +41,7 @@ test('claves y token sobreviven reinicios y guardar campos vacíos conserva los 
   assert.equal(JSON.stringify(reopened.settings()).includes('fake-'),false);
  }finally{reopened.db.close();}
 });
+test('la voz del perfil y su nombre se conservan al reabrir la base local',t=>{
+ const {s,dir}=fixture(t),p=s.list('profiles')[0];s.assignVoice(p.id,'voice-saved','Narradora latina');const reopened=createStore(dir);
+ try{const saved=reopened.list('profiles').find(x=>x.id===p.id);assert.equal(saved.voiceId,'voice-saved');assert.equal(saved.voiceName,'Narradora latina');assert.equal(saved.niche,p.niche);}finally{reopened.db.close();}
+});

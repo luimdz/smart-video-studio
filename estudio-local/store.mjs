@@ -5,7 +5,10 @@ import path from 'node:path';
 import { z } from './deps.mjs';
 
 export const profileSchema = z.object({ name: z.string().trim().min(2), niche: z.string().trim().min(2), audience: z.string().trim().min(2), brief: z.string().default(''), color: z.string().regex(/^#[0-9a-fA-F]{6}$/).default('#b5ed75'), voiceId: z.string().regex(/^[A-Za-z0-9_-]*$/).max(100).default('') });
-export const jobSchema = z.object({ profileId: z.string().uuid(), title: z.string().trim().min(3).max(140), topic: z.string().trim().min(10).max(12000), type: z.enum(['video','series','vsl']), style: z.enum(['motion','2d']), episodes: z.number().int().min(1).max(25), duration: z.number().int().min(30).max(300), maxCredits: z.number().int().min(100).max(30000), requestKey: z.string().uuid() }).superRefine((v,c)=>{
+export const jobSchema = z.object({ profileId: z.string().uuid(), title: z.string().trim().min(3).max(140), topic: z.string().trim().min(10).max(12000), type: z.enum(['video','series','vsl']), style: z.enum(['motion','2d','static']), useLogo:z.boolean().default(false),logoId:z.string().uuid().nullable().default(null),referenceIds:z.array(z.string().uuid()).max(4).default([]),useReferenceBackground:z.boolean().default(false),staticText:z.string().default(''), episodes: z.number().int().min(1).max(25), duration: z.number().int().min(30).max(300), maxCredits: z.number().int().min(100).max(30000), requestKey: z.string().uuid() }).superRefine((v,c)=>{
+  if(v.useLogo&&!v.logoId)c.addIssue({code:'custom',message:'Adjunta un logo PNG o desactiva la opción de logo.'});
+  if(v.useReferenceBackground&&!v.referenceIds.length)c.addIssue({code:'custom',message:'Adjunta una imagen para usarla como fondo.'});
+  if(v.type==='series'&&v.staticText.trim())c.addIssue({code:'custom',message:'En una serie, deja el texto estático vacío para crear un texto propio por capítulo.'});
   if(v.type==='series' && v.episodes<10)c.addIssue({code:'custom',message:'Una serie debe tener de 10 a 25 capítulos.'});
   if(v.type!=='series' && v.episodes!==1)c.addIssue({code:'custom',message:'Un video individual tiene un capítulo.'});
   if(v.type==='vsl' && v.duration<120)c.addIssue({code:'custom',message:'Una VSL debe durar entre 120 y 300 segundos.'});
@@ -25,6 +28,7 @@ export function createStore(root) {
   const db=new DatabaseSync(path.join(root,'studio.sqlite'));
   db.exec('PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON; CREATE TABLE IF NOT EXISTS profiles(id TEXT PRIMARY KEY,data TEXT NOT NULL); CREATE TABLE IF NOT EXISTS jobs(id TEXT PRIMARY KEY,request_key TEXT UNIQUE NOT NULL,data TEXT NOT NULL); CREATE TABLE IF NOT EXISTS settings(id TEXT PRIMARY KEY,data TEXT NOT NULL); CREATE TABLE IF NOT EXISTS charges(id TEXT PRIMARY KEY,job_id TEXT NOT NULL,period TEXT NOT NULL,kind TEXT NOT NULL,amount INTEGER NOT NULL,status TEXT NOT NULL);');
   db.exec('CREATE TABLE IF NOT EXISTS consumption(id TEXT PRIMARY KEY,job_id TEXT NOT NULL,period TEXT NOT NULL,data TEXT NOT NULL)');
+  db.exec('CREATE TABLE IF NOT EXISTS media(id TEXT PRIMARY KEY,data TEXT NOT NULL)');
   const keyFile=path.join(root,'key');
   if(!existsSync(keyFile))writeFileSync(keyFile,randomBytes(32),{mode:0o600});
   const key=readFileSync(keyFile);
@@ -41,8 +45,12 @@ export function createStore(root) {
     db.prepare("INSERT OR REPLACE INTO settings VALUES('secrets',?)").run(JSON.stringify({iv:iv.toString('base64'),tag:cipher.getAuthTag().toString('base64'),value:value.toString('base64')}));
   }
   return {db,list,settings,secrets,saveSettings,getJob,saveJob,
+    addMedia(data){const id=randomUUID();db.prepare('INSERT INTO media VALUES(?,?)').run(id,JSON.stringify(data));return id;},
+    assignVoice(id,voiceId,voiceName=''){const p=list('profiles').find(p=>p.id===id);if(!p)throw new Error('Perfil no encontrado.');p.voiceId=z.string().regex(/^[a-zA-Z0-9_-]{1,100}$/).parse(voiceId);p.voiceName=z.string().max(500).parse(voiceName);db.prepare('UPDATE profiles SET data=? WHERE id=?').run(JSON.stringify(p),p.id);return p;},
     addProfile(input){const p={id:randomUUID(),...profileSchema.parse(input),createdAt:new Date().toISOString()};db.prepare('INSERT INTO profiles VALUES(?,?)').run(p.id,JSON.stringify(p));return p;},
-    addJob(input){const d=jobSchema.parse(input);if(!list('profiles').some(p=>p.id===d.profileId))throw new Error('Selecciona un perfil existente.');const old=db.prepare('SELECT data FROM jobs WHERE request_key=?').get(d.requestKey);if(old)return JSON.parse(old.data);const job={...d,id:randomUUID(),status:'draft',progress:0,scripts:[],audio:{},videos:{},bible:null,outline:null,corrections:[],reviewPass:0,reviewPassed:false,events:[],createdAt:new Date().toISOString()};db.prepare('INSERT INTO jobs VALUES(?,?,?)').run(job.id,d.requestKey,JSON.stringify(job));return job;},
+    addJob(input){const d=jobSchema.parse(input);if(!list('profiles').some(p=>p.id===d.profileId))throw new Error('Selecciona un perfil existente.');const old=db.prepare('SELECT data FROM jobs WHERE request_key=?').get(d.requestKey);if(old)return JSON.parse(old.data);const media=id=>{const row=db.prepare('SELECT data FROM media WHERE id=?').get(id);if(!row)throw new Error('No se encontró la imagen adjunta. Vuelve a adjuntarla.');return JSON.parse(row.data);};
+      const logo=d.useLogo?media(d.logoId):null,references=d.referenceIds.map(media);if(logo&&logo.kind!=='logo')throw new Error('El logo debe ser PNG.');if(references.some(x=>x.kind!=='reference'))throw new Error('Referencia no válida.');
+      const job={...d,logo,referenceImages:references,id:randomUUID(),status:'draft',progress:0,scripts:[],audio:{},videos:{},bible:null,outline:null,corrections:[],reviewPass:0,reviewPassed:false,events:[],createdAt:new Date().toISOString()};db.prepare('INSERT INTO jobs VALUES(?,?,?)').run(job.id,d.requestKey,JSON.stringify(job));return job;},
     reserve(jobId,kind,amount,limit,chargeId=randomUUID()){
       if(!Number.isSafeInteger(amount)||amount<0)throw new Error('Reserva inválida.');
       const job=getJob(jobId),p=period();

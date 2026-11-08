@@ -15,14 +15,22 @@ export async function renderEpisode(j,profile,number,library,{width=1080,height=
   if(audio.duration>300)throw new Error('La voz supera el máximo de 300 segundos. Ajusta el guion antes de exportar.');
   const dir=path.join(library,'productions',j.id,`episode-${String(number).padStart(2,'0')}`);await mkdir(dir,{recursive:true});const temp=path.join(dir,'work');await mkdir(temp,{recursive:true});
   const backgrounds=profile.assets||[];let base;
-  if(j.style==='motion'&&backgrounds.length){const source=await requireStorage(profile.assetsRoot||library),input=path.resolve(source,'assets',backgrounds[(number-1)%backgrounds.length]);if(!input.startsWith(path.join(source,'assets')+path.sep))throw new Error('Recurso visual inválido.');base=await sharp(await readFile(input),{limitInputPixels:40000000}).resize(1080,1920,{fit:'cover'}).png().toBuffer();}
+  const reference=j.useReferenceBackground?j.referenceImages?.[0]?.file:null;
+  if(reference||((j.style==='motion'||j.style==='static')&&backgrounds.length)){
+    let input=reference;
+    if(!input){const source=await requireStorage(profile.assetsRoot||library);input=path.resolve(source,'assets',backgrounds[(number-1)%backgrounds.length]);if(!input.startsWith(path.join(source,'assets')+path.sep))throw new Error('Recurso visual inválido.');}
+    base=await sharp(await readFile(input),{limitInputPixels:40000000}).resize(1080,1920,{fit:j.style==='static'?'contain':'cover',background:'#101827'}).png().toBuffer();
+  }else if(j.style==='static')base=await sharp({create:{width:1080,height:1920,channels:4,background:'#101827'}}).png().toBuffer();
   else base=await sharp(Buffer.from(backdrop(j,profile,number))).png().toBuffer();
-  const baseFile=path.join(temp,'background.png');await writeFile(baseFile,base);const segments=captions(audio),parts=[];
+  if(j.style==='static')base=await sharp(base).composite([{input:Buffer.from(letterOverlay(j.staticText?.trim()?j.staticText:audio.text,profile.name))}]).png().toBuffer();
+  const logo=j.useLogo&&j.logo?await sharp(await readFile(j.logo.file),{limitInputPixels:40000000}).resize(180,140,{fit:'inside'}).png().toBuffer():null;
+  const logoMeta=logo?await sharp(logo).metadata():null;
+  const baseFile=path.join(temp,'background.png');await writeFile(baseFile,base);const segments=j.style==='static'?[{text:'',start:0,end:audio.duration}]:captions(audio),parts=[];
   for(let i=0;i<segments.length;i++){
     const segment=segments[i],lines=words(segment.text,31).slice(0,4),boxHeight=lines.length*64+80;
-    const overlay=`<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1920"><rect x="56" y="${1690-boxHeight}" width="968" height="${boxHeight}" rx="30" fill="#07130e" fill-opacity=".9"/>${lines.map((text,k)=>`<text x="540" y="${1755-boxHeight+k*64}" text-anchor="middle" font-family="Arial" font-size="48" font-weight="bold" fill="#fff">${escapeXml(text)}</text>`).join('')}<rect x="56" y="1740" width="${Math.round(968*(i+1)/segments.length)}" height="6" rx="3" fill="${profile.color}"/></svg>`;
-    const overlayFile=path.join(temp,`caption-${i}.png`);await sharp(Buffer.from(overlay)).png().toFile(overlayFile);const part=path.join(temp,`part-${i}.mp4`);parts.push(part);
-    await processFile('ffmpeg',['-hide_banner','-loglevel','error','-y','-loop','1','-framerate','30','-i',baseFile,'-loop','1','-framerate','30','-i',overlayFile,'-filter_complex',`[0:v]scale=1120:1992,crop=1080:1920:x='20+15*sin(t/4)':y='36+20*cos(t/4)'[bg];[bg][1:v]overlay=0:0,scale=${width}:${height},format=yuv420p[out]`,'-map','[out]','-t',String(segment.end-segment.start),'-an','-r','30','-c:v','libx264','-preset','ultrafast','-crf','22','-threads','2',part],dir);
+    const overlay=j.style==='static'?'<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1920"></svg>':`<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1920"><rect x="56" y="${1690-boxHeight}" width="968" height="${boxHeight}" rx="30" fill="#07130e" fill-opacity=".9"/>${lines.map((text,k)=>`<text x="540" y="${1755-boxHeight+k*64}" text-anchor="middle" font-family="Arial" font-size="48" font-weight="bold" fill="#fff">${escapeXml(text)}</text>`).join('')}<rect x="56" y="1740" width="${Math.round(968*(i+1)/segments.length)}" height="6" rx="3" fill="${profile.color}"/></svg>`;
+    const overlayFile=path.join(temp,`caption-${i}.png`);let frame=sharp(Buffer.from(overlay));if(logo)frame=frame.composite([{input:logo,left:1080-40-logoMeta.width,top:40}]);await frame.png().toFile(overlayFile);const part=path.join(temp,`part-${i}.mp4`);parts.push(part);
+    await processFile('ffmpeg',['-hide_banner','-loglevel','error','-y','-loop','1','-framerate','30','-i',baseFile,'-loop','1','-framerate','30','-i',overlayFile,'-filter_complex',j.style==='static'?`[0:v][1:v]overlay=0:0,scale=${width}:${height},format=yuv420p[out]`:`[0:v]scale=1120:1992,crop=1080:1920:x='20+15*sin(t/4)':y='36+20*cos(t/4)'[bg];[bg][1:v]overlay=0:0,scale=${width}:${height},format=yuv420p[out]`,'-map','[out]','-t',String(segment.end-segment.start),'-an','-r','30','-c:v','libx264','-preset','ultrafast','-crf','22','-threads','2',part],dir);
   }
   const listing=path.join(temp,'segments.txt');await writeFile(listing,parts.map(p=>`file '${p.replace(/'/g,"'\\''")}'`).join('\n'));
   const pending=path.join(dir,'video.pending.mp4'),file=path.join(dir,'video.mp4');
@@ -31,4 +39,11 @@ export async function renderEpisode(j,profile,number,library,{width=1080,height=
   if(!check.streams.some(s=>s.codec_type==='audio')||!check.streams.some(s=>s.codec_type==='video'&&s.width===width&&s.height===height)||Math.abs(Number(check.format.duration)-audio.duration)>0.6)throw new Error('La comprobación del archivo exportado falló.');
   await rename(pending,file);await writeFile(path.join(dir,'script.json'),JSON.stringify(j.scripts[number-1],null,2));await writeFile(path.join(dir,'copy.txt'),`Título: ${j.scripts[number-1]?.title||j.title}\n\nFacebook\n${j.scripts[number-1]?.facebookCopy||''}\n\nInstagram\n${j.scripts[number-1]?.instagramCopy||''}`);await rm(temp,{recursive:true,force:true});
   return {file,duration:Number(check.format.duration),bytes:Number(check.format.size),width,height,readyAt:new Date().toISOString()};
+}
+
+export function letterOverlay(text,name=''){
+ const paragraphs=String(text).split('\n');let lines=[],size=46;
+ for(;size>=18;size-=2){const width=Math.floor(840/(size*.65));lines=paragraphs.flatMap(p=>p.trim()?words(p.replace(new RegExp(`(\\S{${width}})(?=\\S)`,'gu'),'$1 '),width):['']);if(lines.length*size*1.45<=1260)break;}
+ if(size<18)throw new Error('El texto es demasiado extenso para una lámina legible. Divídelo en varios videos o reduce el texto.');
+ return `<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1920"><rect x="70" y="300" width="940" height="1380" rx="30" fill="#0b1220" fill-opacity=".92"/><text x="80" y="110" font-family="Arial" font-size="28" fill="#fff">${escapeXml(String(name).slice(0,80))}</text>${lines.map((line,i)=>`<text x="120" y="${360+size+i*size*1.45}" font-family="Arial" font-size="${size}" fill="#fff">${escapeXml(line)}</text>`).join('')}</svg>`;
 }

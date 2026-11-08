@@ -150,3 +150,17 @@ En **Perfiles y marcas → Elegir voz**, se abre la biblioteca de ElevenLabs con
 Los filtros usan etiquetas y variantes verificadas de ElevenLabs; una voz sin metadatos de acento latino no se presenta como latina. El acento final depende de la voz y el modelo. La consulta excluye voces de tarifa especial. Seleccionar **Añadir y asignar voz** añade esa voz a tu colección y la asigna al perfil, sujeto a permisos y espacios del plan. Esta acción no genera audio. Si la voz ya estaba añadida, puedes elegirla desde **Mis voces**.
 
 Referencia: [biblioteca de voces](https://elevenlabs.io/docs/api-reference/voices/voice-library/get-shared).
+
+## 12. Tarjetas, logo y referencias por producción
+
+Los perfiles se muestran en tarjetas compactas de igual altura, con la voz y su botón en la parte superior. **Ver ficha** conserva el acceso a toda la temática, audiencia e información del negocio, página o canal; los textos no se recortan en la base local.
+
+En **Crear contenido**, activa **Incluir logo de marca en este video** y adjunta un PNG. El logo se ajusta proporcionalmente dentro de 180 × 140 píxeles en una composición de 1080 × 1920, con un margen de 40 píxeles arriba y a la derecha. Permanece fijo incluso sobre imágenes con movimiento. Si no activas la opción, no se incrusta. En una serie se aplica a todos sus capítulos.
+
+Puedes adjuntar hasta cuatro **Imágenes de referencia**, PNG/JPG/WebP, de hasta 16 MB por archivo. Se almacenan localmente. Al producir se envían versiones reducidas a Gemini para orientar guiones y composición; ese análisis consume tokens. No se ha integrado un generador de imágenes: las referencias orientan el contenido y no garantizan una reproducción de su diseño. Solo se usa la primera como fondo si activas esa opción; en otro caso permanecen como referencias de planificación.
+
+Para cartas y poesía, selecciona **Lámina estática · carta o poesía**. Puedes pegar tu texto original, que se mostrará y narrará; o dejarlo vacío para crear un texto original a partir del tema. El formato mantiene una lámina fija con texto legible, sin los subtítulos móviles del resto de formatos. Conserva párrafos y adapta el tamaño del texto; si no cabe con un tamaño legible, solicita dividirlo en varios videos en lugar de omitir palabras. En series, deja el texto vacío para obtener un texto propio por capítulo. La duración final depende del audio generado.
+
+## 13. Confirmar que la voz quedó guardada
+
+Después de elegir una voz, pulsa **Guardar voz para este perfil**. La aplicación confirma el guardado y muestra el nombre de la voz en la tarjeta. Al abrir de nuevo el selector también aparece **Voz actual del perfil**. Si la voz de biblioteca ya se añadió a tu cuenta, se reutiliza su identificador guardado sin intentar añadirla otra vez. El guardado se conserva al reiniciar; no genera audio.
