@@ -9,3 +9,10 @@ test('guardar voz funciona aunque el formulario tenga un campo interno llamado i
  await submit({preventDefault(){},target:form});
  assert.equal(request?.url,'/api/profile-voice');assert.equal(request.body.id,'profile');assert.equal(request.body.voiceId,'chosen');assert.equal(vm.runInContext('state.profiles[0].voiceId',ctx),'chosen');
 });
+test('quitar una referencia conserva las demás y los campos del formulario',async()=>{
+ const source=(await readFile(new URL('../public/app.js',import.meta.url),'utf8')).replace(/^await load\(\);poll=.*$/m,'');
+ const input={files:Array.from({length:11},(_,i)=>({name:`imagen-${i}.png`,size:10}))},background={checked:true},preview={innerHTML:''},element={addEventListener(){}},fields={title:'Mi video',topic:'Mi idea completa'};
+ const ctx=vm.createContext({console,Intl,crypto:{randomUUID:()=> 'request'},URL:{createObjectURL:f=>'blob:'+f.name,revokeObjectURL(){}},DataTransfer:class{constructor(){this.files=[];this.items={add:f=>this.files.push(f)};}},document:{querySelector:s=>s==='input[name=referenceFiles]'||s==='input[name="referenceFiles"]'?input:s==='input[name=useReferenceBackground]'?background:s==='#reference-preview'?preview:element,addEventListener(){}}});
+ vm.runInContext(source,ctx);vm.runInContext('message=()=>{};removeReference(3)',ctx);assert.equal(input.files.length,10);assert.ok(!input.files.some(f=>f.name==='imagen-3.png'));assert.ok(preview.innerHTML.includes('10 / 20'));assert.equal((preview.innerHTML.match(/data-remove-reference=/g)||[]).length,10);assert.equal(fields.title,'Mi video');
+ for(let i=0;i<10;i++)vm.runInContext('removeReference(0)',ctx);assert.equal(input.files.length,0);assert.equal(background.checked,false);
+});

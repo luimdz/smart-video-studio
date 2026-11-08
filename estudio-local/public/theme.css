@@ -35,3 +35,5 @@ nav button{color:#9aabc7}nav button:hover{background:#ffffff05;color:#f1f5ff}nav
 .compact-profile{height:340px}.profile-voice-button{align-self:flex-start;margin:8px 0 12px}.compact-profile .profile-excerpt{height:36px;min-height:36px;font-size:12px}.compact-profile .summary-line:has(.profile-voice){height:44px}
 
 .voice-save-footer{position:sticky;bottom:0;z-index:2;background:#101a2c;padding:14px;border:1px solid var(--line);border-radius:10px;margin-top:14px}.current-voice{margin-bottom:16px}
+
+.attachment-count{width:100%;display:flex;align-items:center;gap:12px;color:#c4d5ef}.attachment-item{width:110px;border:1px solid var(--line);border-radius:10px;padding:8px;background:#101a2c}.attachment-item img{width:92px;height:96px;object-fit:contain}.attachment-item small{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:92px;margin:6px 0}.attachment-item .button{width:100%}
