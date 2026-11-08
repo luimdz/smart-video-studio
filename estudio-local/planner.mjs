@@ -17,7 +17,7 @@ async function generate(store,j,prompt,schema,step){
   const charge=store.reserve(j.id,'text',Buffer.byteLength(system+prompt)+8000,500000,`${j.id}:text:${step}`);
   const r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${config.geminiModel}:generateContent`,{method:'POST',headers:{'Content-Type':'application/json','x-goog-api-key':key},body:JSON.stringify({systemInstruction:{parts:[{text:system}]},contents:[{role:'user',parts:[{text:prompt}]}],generationConfig:{responseMimeType:'application/json',maxOutputTokens:8000,temperature:0.7}}),signal:AbortSignal.timeout(90000),redirect:'error'});
   if(!r.ok){if([400,401,403,404,422,429].includes(r.status))store.releaseRejected(charge);throw new Error(`Gemini devolvió ${r.status}. Revisa la clave, permisos o cuota antes de continuar.`);}
-  const body=await r.json();store.settle(charge);const c=body.candidates?.[0];if(!c||c.finishReason==='MAX_TOKENS')throw new Error('Gemini devolvió una respuesta incompleta.');
+  const body=await r.json();store.recordConsumption(charge,j.id,{provider:'gemini',model:config.geminiModel,step,usage:body.usageMetadata||null});store.settle(charge);const c=body.candidates?.[0];if(!c||c.finishReason==='MAX_TOKENS')throw new Error('Gemini devolvió una respuesta incompleta.');
   return schema.parse(JSON.parse(c.content.parts.filter(p=>!p.thought).map(p=>p.text||'').join('')));
 }
 export async function planningStep(store,j,action){
@@ -52,6 +52,8 @@ export async function voiceStep(store,j,root){
   const charge=store.reserve(j.id,'voice',text.length,config.monthlyCredits,`${j.id}:voice:${number}:${hash}`);
   const r=await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${profile.voiceId}/with-timestamps?output_format=mp3_44100_128`,{method:'POST',headers:{'Content-Type':'application/json','xi-api-key':key},body:JSON.stringify({text,model_id:config.voiceModel}),signal:AbortSignal.timeout(120000),redirect:'error'});
   if(!r.ok){if([400,401,403,404,422,429].includes(r.status))store.releaseRejected(charge);throw new Error(`ElevenLabs devolvió ${r.status}. Revisa la clave, permisos o cuota antes de continuar.`);}
+  const reported=r.headers.get('character-cost'),credit=reported!==null&&Number.isFinite(Number(reported))&&Number(reported)>=0?Number(reported):null;
+  store.recordConsumption(charge,j.id,{provider:'elevenlabs',model:config.voiceModel,episode:number,characters:text.length,credits:credit,estimatedCredits:text.length*(config.pricing?.creditsPerCharacter??(config.voiceModel==='eleven_flash_v2_5'?0.5:1))});
   const result=await r.json();if(!result.audio_base64||!result.alignment?.character_end_times_seconds?.length)throw new Error('ElevenLabs devolvió voz sin tiempos válidos.');
   const duration=result.alignment.character_end_times_seconds.at(-1);if(!Number.isFinite(duration)||duration<=0)throw new Error('Duración de voz inválida.');
   await writeFile(file,Buffer.from(result.audio_base64,'base64'));const meta={text,alignment:result.alignment,duration,voiceId:profile.voiceId,model:config.voiceModel};await writeFile(manifest,JSON.stringify(meta));store.settle(charge);j.audio[number]={...meta,file};

@@ -47,9 +47,10 @@ Dentro de la página **Smart Studio**, mira el menú vertical del lado izquierdo
 2. Crear contenido.
 3. Perfiles y marcas.
 4. Producciones.
-5. **Configuración**, junto al engranaje **⚙**.
+5. Consumo y costos.
+6. **Configuración**, junto al engranaje **⚙**.
 
-Haz clic en el quinto elemento. También hay un botón visible **Configurar mi estudio** en la página de inicio mientras falten conexiones. En una pantalla estrecha, el menú aparece arriba y puede desplazarse horizontalmente.
+Haz clic en **Configuración**. También hay un botón visible **Configurar mi estudio** en la página de inicio mientras falten conexiones. En una pantalla estrecha, el menú aparece arriba y puede desplazarse horizontalmente.
 
 Allí están «Carpeta de biblioteca», «Webhook del coordinador n8n» y la sección **Claves de conexión**, con los campos **Gemini API key** y **ElevenLabs API key**. No son pantallas de Codex ni de n8n.
 
@@ -114,3 +115,22 @@ El diseño visual está en revisión según las preferencias de Smart Growth Onl
 Guardar en GitHub es el paso actual. Después de revisar la UI y validar el primer video, conectaremos el alojamiento elegido y el subdominio propuesto `studio.smartgowth.online`. No hace falta cambiar de proveedor DNS: los registros siguen en IONOS.
 
 Antes del despliegue remoto hay que resolver login y conexión del panel con el motor del Mac. Una subida estática a Netlify o Vercel por sí sola no resuelve esa comunicación.
+
+## 9. Consumo y costos
+
+Abre **Consumo y costos** en el menú izquierdo. El panel muestra:
+
+- Consumo mensual del estudio: créditos de ElevenLabs confirmados o estimados y tokens de Gemini reportados por la API (entrada, salida y razonamiento).
+- Consumo de cada producción: incluye planificación, guiones y revisiones de la temporada completa. Las llamadas fallidas con consumo reportado también se registran.
+- Reservas de voz pendientes, separadas del consumo. Las reservas conservadoras siguen controlando el presupuesto; no se sustituyen por el nuevo contador.
+- Tabla de estimaciones de voz para 45, 60, 90, 120, 150, 180, 240 y 300 segundos. Parte de 150 palabras/minuto y 6 caracteres por palabra con espacios, ajustables. No garantiza una duración exacta.
+
+Pulsa **Actualizar saldo de ElevenLabs** para consultar el saldo de la cuenta, incluido el uso fuera de Smart Studio. Requiere permiso de lectura de suscripción en la API key. La consulta no genera audio. Se muestra fecha de consulta y renovación si el proveedor la informa. No se consulta en cada actualización automática de la interfaz.
+
+En **Tarifas y supuestos**, introduce tus tarifas en USD. Para repartir el precio de la suscripción: importe efectivamente pagado / créditos incluidos × 1.000. Ese costo asignado no equivale a un cargo extra por cada video. Para Gemini, introduce tarifa por millón de tokens de entrada y de salida/razonamiento del modelo utilizado; no se asumen tarifas gratuitas ni precios universales. El cálculo de entrada es conservador y no aplica descuentos de caché. Cambiar tarifas recalcula el historial; actualízalas si cambias de modelo o plan.
+
+ElevenLabs informa el cargo por solicitud en la cabecera `character-cost`; si falta, el panel identifica la parte estimada. Los tokens de Gemini se registran desde `usageMetadata`, incluidos los de razonamiento. No existe aquí un saldo universal de tokens de Gemini: el panel mide el uso de esta aplicación, no la facturación completa de Google Cloud. La tabla por segundos estima voz; Gemini depende también del contexto del negocio, continuidad y revisiones. No es fiable deducirlo únicamente de la duración.
+
+El historial real comienza con esta actualización. Las reservas antiguas se conservan y no se presentan como consumo confirmado. El mes local es calendario en Guatemala; la suscripción del proveedor puede tener otro ciclo. No se hicieron generaciones pagadas para verificar este panel.
+
+Referencias: [consumo y tokens de Gemini](https://ai.google.dev/gemini-api/docs/generate-content/tokens), [respuesta y costo de ElevenLabs](https://elevenlabs.io/docs/api-reference/introduction/), [saldo de suscripción](https://elevenlabs.io/docs/api-reference/user/subscription/get).

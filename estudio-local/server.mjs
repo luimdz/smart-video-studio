@@ -19,7 +19,7 @@ const json=(res,status,data)=>{res.writeHead(status,{'Content-Type':'application
 async function body(req){let size=0,parts=[];for await(const chunk of req){size+=chunk.length;if(size>25*1024*1024)throw new Error('El archivo supera el límite de 25 MB.');parts.push(chunk);}return JSON.parse(Buffer.concat(parts).toString()||'{}');}
 function record(j,message){j.events.unshift({at:new Date().toISOString(),message});j.events=j.events.slice(0,100);store.saveJob(j);}
 function view(j){return {id:j.id,title:j.title,type:j.type,style:j.style,episodes:j.episodes,duration:j.duration,status:j.status,progress:j.progress,error:j.error,profileId:j.profileId,createdAt:j.createdAt,updatedAt:j.updatedAt,maxCredits:j.maxCredits,stage:j.stage||'',demo:!!j.demo,scriptCount:j.scripts.length,audioCount:Object.keys(j.audio).length,videos:Object.fromEntries(Object.entries(j.videos).map(([n,v])=>[n,{duration:v.duration,bytes:v.bytes,width:v.width,height:v.height}]))};}
-async function state(){const c=store.settings(),s=store.secrets();return {profiles:store.list('profiles'),jobs:store.list('jobs').sort((a,b)=>b.createdAt.localeCompare(a.createdAt)).map(view),settings:c,connections:{gemini:!!s.geminiKey,elevenlabs:!!s.elevenKey,n8n:!!(s.n8nToken&&c.n8nUrl)},usage:store.usage(),storage:await storageStatus(c.storageRoot),active:active.size};}
+async function state(){const c=store.settings(),s=store.secrets();return {profiles:store.list('profiles'),jobs:store.list('jobs').sort((a,b)=>b.createdAt.localeCompare(a.createdAt)).map(view),settings:c,connections:{gemini:!!s.geminiKey,elevenlabs:!!s.elevenKey,n8n:!!(s.n8nToken&&c.n8nUrl)},usage:store.usage(),accounting:store.accounting(),storage:await storageStatus(c.storageRoot),active:active.size};}
 async function coordinate(j){
   const c=store.settings(),s=store.secrets();if(!c.useN8n)throw new Error('Conecta n8n para coordinar la producción.');
   const u=new URL(c.n8nUrl);if(u.protocol!=='https:'||u.hostname!=='n8n.planifyx.com')throw new Error('La dirección debe pertenecer a tu instancia n8n.planifyx.com y usar HTTPS.');
@@ -66,6 +66,16 @@ const server=http.createServer(async(req,res)=>{try{
       if(active.size)throw new Error('Espera a que termine el trabajo antes de cambiar la configuración.');
       if(config.n8nUrl){const u=new URL(config.n8nUrl);if(u.protocol!=='https:'||u.hostname!=='n8n.planifyx.com')throw new Error('Usa la URL HTTPS de tu instancia n8n.planifyx.com.');}
       const selected=path.resolve(config.storageRoot);if(selected===path.parse(selected).root)throw new Error('Selecciona una carpeta de biblioteca, no la raíz del disco.');await access(path.dirname(selected));await mkdir(selected,{recursive:true});config.storageRoot=await requireStorage(selected);store.saveSettings(config,data.secrets||{});
+    }
+    else if(url.pathname==='/api/pricing'){
+      const pricing=z.object({voicePerThousand:z.number().min(0).max(10000).nullable(),inputPerMillion:z.number().min(0).max(10000).nullable(),outputPerMillion:z.number().min(0).max(10000).nullable(),creditsPerCharacter:z.number().min(0.01).max(100),wordsPerMinute:z.number().min(60).max(250),charactersPerWord:z.number().min(2).max(15)}).parse(data);store.saveSettings({pricing});
+    }
+    else if(url.pathname==='/api/sync-credits'){
+      const key=store.secrets().elevenKey;if(!key)throw new Error('Configura la clave de ElevenLabs.');
+      const r=await fetch('https://api.elevenlabs.io/v1/user/subscription',{headers:{'xi-api-key':key},signal:AbortSignal.timeout(20000),redirect:'error'});
+      if(!r.ok)throw new Error(`No se pudo consultar el saldo de ElevenLabs (${r.status}). Revisa el permiso de lectura de la clave.`);
+      const b=await r.json();if(!Number.isFinite(b.character_count)||!Number.isFinite(b.character_limit))throw new Error('El proveedor no devolvió un saldo válido.');
+      store.saveSettings({elevenSubscription:{used:b.character_count,limit:b.character_limit,reset:b.next_character_count_reset_unix||null,at:new Date().toISOString()}});
     }
     else if(url.pathname==='/api/pairing-token'){let token=store.secrets().n8nToken;if(!token){token=randomBytes(32).toString('hex');store.saveSettings({},{n8nToken:token});}json(res,200,{token});return;}
     else if(url.pathname==='/api/voices'){const key=store.secrets().elevenKey;if(!key)throw new Error('Guarda primero la clave de ElevenLabs.');const r=await fetch('https://api.elevenlabs.io/v1/voices',{headers:{'xi-api-key':key},signal:AbortSignal.timeout(20000),redirect:'error'});if(!r.ok)throw new Error(`ElevenLabs respondió ${r.status}.`);const out=await r.json();json(res,200,{voices:out.voices.map(v=>({id:v.voice_id,name:v.name,labels:v.labels}))});return;}

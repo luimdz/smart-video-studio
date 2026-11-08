@@ -24,6 +24,7 @@ export function createStore(root) {
   mkdirSync(root,{recursive:true,mode:0o700});
   const db=new DatabaseSync(path.join(root,'studio.sqlite'));
   db.exec('PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON; CREATE TABLE IF NOT EXISTS profiles(id TEXT PRIMARY KEY,data TEXT NOT NULL); CREATE TABLE IF NOT EXISTS jobs(id TEXT PRIMARY KEY,request_key TEXT UNIQUE NOT NULL,data TEXT NOT NULL); CREATE TABLE IF NOT EXISTS settings(id TEXT PRIMARY KEY,data TEXT NOT NULL); CREATE TABLE IF NOT EXISTS charges(id TEXT PRIMARY KEY,job_id TEXT NOT NULL,period TEXT NOT NULL,kind TEXT NOT NULL,amount INTEGER NOT NULL,status TEXT NOT NULL);');
+  db.exec('CREATE TABLE IF NOT EXISTS consumption(id TEXT PRIMARY KEY,job_id TEXT NOT NULL,period TEXT NOT NULL,data TEXT NOT NULL)');
   const keyFile=path.join(root,'key');
   if(!existsSync(keyFile))writeFileSync(keyFile,randomBytes(32),{mode:0o600});
   const key=readFileSync(keyFile);
@@ -48,6 +49,9 @@ export function createStore(root) {
       const row=db.prepare(`INSERT INTO charges(id,job_id,period,kind,amount,status) SELECT ?,?,?,?,?,'reserved' WHERE NOT EXISTS(SELECT 1 FROM charges WHERE id=?) AND COALESCE((SELECT sum(amount) FROM charges WHERE period=? AND kind=?),0)+?<=? AND COALESCE((SELECT sum(amount) FROM charges WHERE job_id=? AND kind=?),0)+?<=?`).run(chargeId,jobId,p,kind,amount,chargeId,p,kind,amount,limit,jobId,kind,amount,kind==='voice'?job.maxCredits:limit);
       if(!row.changes)throw new Error('Se alcanzó el límite de consumo, o esta llamada ya está reservada.');return chargeId;
     },
+    recordConsumption(id,jobId,data){db.prepare('INSERT OR IGNORE INTO consumption VALUES(?,?,?,?)').run(id,jobId,period(),JSON.stringify({...data,at:new Date().toISOString()}));},
+    consumption(){return db.prepare('SELECT id,job_id,period,data FROM consumption').all().map(r=>({id:r.id,jobId:r.job_id,period:r.period,...JSON.parse(r.data)}));},
+    accounting(){return {period:period(),records:this.consumption(),reservations:db.prepare("SELECT job_id AS jobId,kind,status,sum(amount) AS amount FROM charges WHERE period=? GROUP BY job_id,kind,status").all(period()),pricing:settings().pricing||{},subscription:settings().elevenSubscription||null};},
     settle(id){db.prepare("UPDATE charges SET status='settled' WHERE id=?").run(id);},
     releaseRejected(id){db.prepare("DELETE FROM charges WHERE id=? AND status='reserved'").run(id);},
     usage(){return db.prepare('SELECT kind,sum(amount) AS amount FROM charges WHERE period=? GROUP BY kind').all(period());},
