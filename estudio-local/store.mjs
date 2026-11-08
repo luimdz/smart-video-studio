@@ -30,6 +30,7 @@ export function createStore(root) {
   db.exec('CREATE TABLE IF NOT EXISTS consumption(id TEXT PRIMARY KEY,job_id TEXT NOT NULL,period TEXT NOT NULL,data TEXT NOT NULL)');
   db.exec('CREATE TABLE IF NOT EXISTS media(id TEXT PRIMARY KEY,data TEXT NOT NULL)');
   db.exec('CREATE TABLE IF NOT EXISTS generation_responses(id TEXT PRIMARY KEY,data TEXT NOT NULL)');
+  db.exec('CREATE TABLE IF NOT EXISTS generation_failures(id TEXT PRIMARY KEY,status INTEGER NOT NULL,reservation INTEGER NOT NULL,at TEXT NOT NULL)');
   const keyFile=path.join(root,'key');
   if(!existsSync(keyFile))writeFileSync(keyFile,randomBytes(32),{mode:0o600});
   const key=readFileSync(keyFile);
@@ -65,6 +66,7 @@ export function createStore(root) {
     consumption(){return db.prepare('SELECT id,job_id,period,data FROM consumption').all().map(r=>({id:r.id,jobId:r.job_id,period:r.period,...JSON.parse(r.data)}));},
     accounting(){return {period:period(),records:this.consumption(),reservations:db.prepare("SELECT job_id AS jobId,kind,status,sum(amount) AS amount FROM charges WHERE period=? GROUP BY job_id,kind,status").all(period()),pricing:settings().pricing||{},subscription:settings().elevenSubscription||null};},
     settle(id){db.prepare("UPDATE charges SET status='settled' WHERE id=?").run(id);},
+    rejectGeneration(id,status){const row=db.prepare("SELECT amount FROM charges WHERE id=? AND kind='text' AND status='reserved'").get(id);if(!row)return;db.exec('BEGIN IMMEDIATE');try{db.prepare('INSERT OR REPLACE INTO generation_failures VALUES(?,?,?,?)').run(id,status,row.amount,new Date().toISOString());db.prepare("UPDATE charges SET amount=0,status='rejected' WHERE id=? AND status='reserved'").run(id);db.exec('COMMIT');}catch(error){db.exec('ROLLBACK');throw error;}},
     releaseRejected(id){db.prepare("DELETE FROM charges WHERE id=? AND status='reserved'").run(id);},
     usage(){return db.prepare('SELECT kind,sum(amount) AS amount FROM charges WHERE period=? GROUP BY kind').all(period());},
     interruptedCharges(jobId){return db.prepare("SELECT id FROM charges WHERE job_id=? AND status='reserved'").all(jobId);},

@@ -172,3 +172,11 @@ Cada imagen adjunta tiene un botón **Quitar**. También puedes usar **Quitar to
 La generación solicita un esquema JSON explícito. Si el plan llega como una lista válida de capítulos, se normaliza al objeto esperado sin eliminar capítulos. Las respuestas nuevas se guardan localmente antes de validarlas: al reanudar esa etapa se reutilizan y no se repite la llamada. Una respuesta inválida o incompleta se detiene con un mensaje en español; no se regenera automáticamente.
 
 Las respuestas fallidas anteriores a esta mejora no pueden recuperarse si no se guardaron. Al reanudar, se conserva la ficha ya creada y se permite un nuevo intento de la etapa fallida; el consumo anterior permanece en el historial. Las llamadas con resultado incierto continúan bloqueadas para evitar cobros duplicados.
+
+## 15. Gemini temporalmente no disponible (503)
+
+Un HTTP 503 de Gemini indica indisponibilidad temporal o saturación del servicio; no es un diagnóstico de clave incorrecta. Se conservan ficha, plan y guiones ya guardados. La aplicación reintenta esa etapa hasta tres veces, esperando aproximadamente 2 y 5 segundos más una pequeña variación entre intentos. Si persiste, se detiene y permite reanudar más adelante.
+
+Cada HTTP 503 explícito queda registrado en `generation_failures`; se libera su reserva local, sin presentarlo como consumo confirmado. Esto no modifica facturas ni cuotas del proveedor. Un corte de red o tiempo de espera sin respuesta sigue dejando la reserva pendiente, porque no se conoce su resultado. No se cambia de modelo ni de tarifa automáticamente.
+
+Referencia: [errores de Gemini](https://ai.google.dev/gemini-api/docs/generate-content/api-errors).
