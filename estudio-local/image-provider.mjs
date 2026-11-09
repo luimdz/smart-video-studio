@@ -10,7 +10,7 @@ export function extractImage(body,provider){
  const outputs=(body.steps||[]).filter(s=>s.type==='model_output').flatMap(s=>s.content||[]).filter(c=>c.type==='image'&&c.data);return outputs.at(-1)?.data;
 }
 export async function generateImage(store,j,{prompt,references=[],episode=1,scene=1,library=j.root}){
- const provider=j.imageProvider||'gemini',model=imageModel(provider),quality=j.imageQuality||'high',refs=references.slice(0,provider==='openai'?16:14);
+ const provider=j.imageProvider||'gemini',model=imageModel(provider),quality=j.imageQuality||'low',refs=references.slice(0,provider==='openai'?16:14);
  const images=await Promise.all(refs.map(async r=>{const data=await sharp(await readFile(r.file),{limitInputPixels:40000000}).rotate().resize({width:1536,height:1536,fit:'inside',withoutEnlargement:true}).flatten({background:'#fff'}).jpeg({quality:85}).toBuffer();return {data,hash:createHash('sha256').update(data).digest('hex')};}));
  const hash=createHash('sha256').update(JSON.stringify({prompt,provider,model,quality,refs:images.map(i=>i.hash)})).digest('hex'),baseId=`${j.id}:image:${episode}:${scene}:${hash}`,cached=store.generationResponse(baseId);
  if(cached){if(cached.error)throw Error(cached.error);try{await access(cached.file);}catch{const meta=await sharp(cached.raw,{limitInputPixels:50000000}).metadata();if(meta.width>=meta.height)throw Error('La imagen conservada no es vertical. Cambia la dirección visual para generar otra versión.');await sharp(cached.raw,{limitInputPixels:50000000}).rotate().resize(1080,1920,{fit:'contain',background:'#111827'}).png().toFile(cached.file);}return cached;}

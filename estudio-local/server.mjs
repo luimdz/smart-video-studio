@@ -134,7 +134,7 @@ const server=http.createServer(async(req,res)=>{try{
     else if(url.pathname==='/api/visual-settings'){
       const j=store.getJob(data.id);if(active.has(j.id)||queue.current===j.id||queue.pending.includes(j.id)||j.status==='ready')throw new Error('Pausa el trabajo antes de cambiar sus imágenes. Para un video terminado crea otra versión.');
       if(j.style==='2d')throw new Error('Este ajuste es para imágenes de IA, no para el motor 2D.');
-      const visual=z.object({imageProvider:z.enum(['gemini','openai']),imageQuality:z.enum(['medium','high']),imageDirection:z.string(),maxImages:z.number().int().min(1).max(1000)}).parse(data);Object.assign(j,visual,{generatedImages:{},error:null,status:'paused'});record(j,'Generador de imágenes actualizado. Se conservan el guion y la voz.');
+      const visual=z.object({imageProvider:z.enum(['gemini','openai']),imageQuality:z.enum(['low','medium','high']),imageDirection:z.string(),maxImages:z.number().int().min(1).max(1000)}).parse(data);Object.assign(j,visual,{generatedImages:{},error:null,status:'paused'});record(j,'Generador de imágenes actualizado. Se conservan el guion y la voz.');
     }
     else if(url.pathname==='/api/job-script'){
       const j=store.getJob(data.id);if(active.has(j.id)||queue.current===j.id||queue.pending.includes(j.id))throw new Error('Pausa este trabajo antes de editar el guion.');

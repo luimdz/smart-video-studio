@@ -20,7 +20,7 @@ La UI separa **Contenido** (narración por escenas o poesía/carta/mensaje) de *
 
 ### Generadores de imágenes
 
-**Gemini / Nano Banana 2.1:** usa la clave Gemini, Interactions API, `store=false`, formato vertical 9:16 y salida 1K/2K según calidad. **OpenAI / GPT Image 2:** requiere su propia clave en Configuración; utiliza exactamente `gpt-image-2`, salida 1152×2048, calidad media/alta y edición con referencias cuando se adjuntan. No cambia de proveedor silenciosamente. La versión para este propietario deja OpenAI seleccionado por preferencia explícita.
+**Gemini / Nano Banana 2.1:** usa la clave Gemini, Interactions API, `store=false`, formato vertical 9:16 y salida 1K/2K según calidad. **OpenAI / GPT Image 2:** requiere su propia clave en Configuración; utiliza exactamente `gpt-image-2`, salida 1152×2048, calidad baja/media/alta y edición con referencias cuando se adjuntan. No cambia de proveedor silenciosamente. La versión para este propietario deja OpenAI seleccionado por preferencia explícita.
 
 Los archivos finales se normalizan a 1080×1920 y permanecen en la biblioteca local. Los modelos de imagen reciben instrucciones y referencias por API para procesarlas; los archivos no se sirven desde almacenamiento remoto al reproducir el video.
 
@@ -47,3 +47,9 @@ Quedan pendientes publicación Facebook/Instagram, ampliar la evaluación visual
 El detalle muestra las observaciones y ofrece **Corregir observaciones y continuar**. Esa acción abre un ciclo acotado nuevo, conserva ficha, arco y guiones y utiliza una caché distinta para las correcciones y revisiones. No repite indefinidamente la revisión ya agotada ni omite las observaciones. También se puede **Revisar y editar guion** antes de generar voces: guardar no consume APIs y requiere otra revisión al continuar. No se modifica un guion que ya tiene voz o video; para eso hace falta otra versión.
 
 La UI actualiza el estado del diálogo y sus controles durante la producción. Un reinicio del servicio conserva la cola como trabajos pausados para evitar llamadas imprevistas; se reanudan desde sus avances con Producir. La sesión del navegador se renueva cuando cambia el motor local.
+
+### Calidad económica
+
+La UI ofrece Baja (`low`), Media y Alta para GPT Image 2, también al cambiar el generador de un trabajo detenido. Las producciones nuevas usan Baja por defecto. El proveedor recibe la calidad elegida sin aumentarla durante una corrección o reintento; el caché distingue las tres calidades. Se conserva la resolución de generación existente, 1152×2048, y la exportación final 1080×1920. En Nano Banana, baja/media corresponden a 1K y alta a 2K. Una imagen con mucho texto puede requerir más calidad para pasar la comprobación de lectura.
+
+Los importes publicados son USD decimales: US$0.053 equivale a 5.3 centavos, no a 53. El costo final incluye entrada, referencias y salida, y una corrección solicitada al modelo cuenta como otra llamada.
