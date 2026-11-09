@@ -22,7 +22,9 @@ export function composeCodeArtPlan(plan,{evidence=false}={}){
  const copy=structuredClone(plan);
  for(const shot of copy.shots){if(evidence)shot.world='studio';if(shot.objects.length!==1)continue;const o=shot.objects[0],distance=Math.hypot(...shot.cameraFrom.map((v,i)=>v-shot.target[i]));o.position=[...shot.target];o.size=Math.min(12,(o.kind==='camera'?310:370)*distance/1400);if(['arrive','reveal'].includes(o.action)){o.action='rotate';o.actionWord=shot.startWord;}
   if(o.kind==='floorplan'){shot.cameraFrom=[8,9,14];shot.cameraTo=[6,10,12];shot.target=[0,0,0];o.position=[0,0,0];o.size=3.3;}
-  if(o.kind==='ruler'&&evidence){o.position=[shot.target[0],shot.target[1]-1.8,shot.target[2]];o.size=370*distance/1400;shot.objects.push({id:'forensic-scale-context',kind:'evidence',position:[shot.target[0]-.3,shot.target[1]+.5,shot.target[2]],size:2.4,color:'#edb64b',action:'hold',actionWord:shot.startWord});}
+
  }
  return copy;
 }
+
+export function validateShotSubjects(plan,windows){for(let i=0;i<plan.shots.length;i++){const shot=plan.shots[i],window=windows[i];if(!window||shot.objects.some(o=>!window.allowedKinds.includes(o.kind)))throw Error(`El plano ${i+1} usa objetos que no pertenecen a la narración de esa escena. Se necesita otro plan visual.`);if(shot.objects.every(o=>['arrive','reveal'].includes(o.action)&&o.actionWord>shot.startWord+1))throw Error(`El plano ${i+1} deja la pantalla vacía mientras habla la voz.`);}return plan;}

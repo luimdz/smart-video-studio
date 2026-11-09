@@ -10,28 +10,37 @@ El coordinador de esta instalación está configurado y publicado: [workflow](ht
 
 Una producción simultánea con cola: al pulsar Producir mientras hay otro trabajo, el nuevo queda en espera; un fallo no detiene los siguientes. Los trabajos en espera o detenidos se pausan de inmediato. En un trabajo activo la pausa se aplica al terminar la etapa actual. Una llamada de resultado incierto bloquea el reenvío; respuestas 503 explícitas admiten reintentos acotados y liberan su propia reserva. Los límites locales no equivalen al saldo del proveedor.
 
-## Estilos visuales
+## Contenido, imágenes y audio
 
-- **Imágenes con movimiento:** anima y alterna imágenes de producción propias. Las referencias orientan a Gemini y no se convierten automáticamente en fondos. Sin imágenes se usan ilustraciones locales; no fotografías generadas por API.
-- **Lámina estática:** carta clara o nota romántica ilustrada con papel, rosas rosadas, velas y bokeh. Genera contenido original o utiliza texto exacto cuando se selecciona explícitamente. Guarda MP4 y PNG descargables desde el detalle.
-- **CODE ART 2D:** integración inicial del kit, materiales, piezas, cámara, subtítulos Figtree y mezcla de efectos originales. Plan visual declarativo sincronizado con las palabras de ElevenLabs; render local 1080×1920 a 60 fps. El presentador provisional se retiró de producción. Ver [alcance y recursos](../docs/CODE_ART_LOCAL.md).
+La UI separa **Contenido** (narración por escenas o poesía/carta/mensaje) de **Estilo visual** (imagen fija, imágenes con movimiento o 2D experimental).
 
-### Poesía con música, con o sin voz
+- **Poesía/carta/mensaje:** Nano Banana o GPT Image 2 genera la imagen completa, incluido el texto final. El motor verifica la transcripción del poema con Gemini antes de generar voz. Si no coincide, intenta una sola corrección dentro del límite de imágenes; conserva resultados y consumo. No monta una nota dibujada localmente como sustituto. Seleccionar movimiento mantiene esta lámina y aplica un acercamiento suave; no la convierte en una secuencia de iconos.
+- **Narración por escenas:** con imágenes propias se animan esos recursos. Sin imágenes propias se genera una imagen por escena. Los cambios se sincronizan con las palabras de cada escena de la voz, no con fracciones iguales de duración. Las referencias guían el estilo y los protagonistas.
+- **Animación 2D experimental:** conserva su adaptador CODE ART y un catálogo limitado. Su calidad artística no equivale todavía a la de los ejemplos originales; no debe presentarse como un motor terminado. Valida que los objetos pertenezcan a la escena narrada y admite una corrección de plan. Los efectos responden a acciones visibles: se retiraron los aires repetidos por intervalos y la sonorización automática de movimientos suaves de cámara.
 
-En **Crear contenido → Lámina estática → Diseño y audio de la lámina**:
+### Generadores de imágenes
 
-1. Seleccionar diseño.
-2. Activar o desactivar **Agregar voz que lee el texto**. Sin voz no se llama a ElevenLabs ni se necesita una voz asignada; se mantiene la duración solicitada. Gemini sigue escribiendo el contenido cuando corresponda.
-3. Activar **Agregar música instrumental** y cargar MP3/WAV de hasta 16 MB o seleccionar una pista guardada. La pista se conserva en la biblioteca local para próximas producciones.
-4. Ajustar volumen. La música se repite si es corta, se recorta a la duración del video y se desvanece al final. Con narración se mezcla a menor nivel.
+**Gemini / Nano Banana 2.1:** usa la clave Gemini, Interactions API, `store=false`, formato vertical 9:16 y salida 1K/2K según calidad. **OpenAI / GPT Image 2:** requiere su propia clave en Configuración; utiliza exactamente `gpt-image-2`, salida 1152×2048, calidad media/alta y edición con referencias cuando se adjuntan. No cambia de proveedor silenciosamente. La versión para este propietario deja OpenAI seleccionado por preferencia explícita.
 
-No se incluye una canción de muestra ni se sustituye la música por un tono sintético. Se utiliza el archivo que seleccione el usuario. El diseño romántico es ilustración local; los fondos fotográficos generados por API todavía no están conectados.
+Los archivos finales se normalizan a 1080×1920 y permanecen en la biblioteca local. Los modelos de imagen reciben instrucciones y referencias por API para procesarlas; los archivos no se sirven desde almacenamiento remoto al reproducir el video.
+
+Guardar claves no las muestra de nuevo: permanecen cifradas en este equipo. Una clave Gemini válida para guiones no garantiza cuota de imagen; un 429 informa la restricción de imágenes. OpenAI puede exigir permisos/facturación específicos del proyecto. No se repiten automáticamente solicitudes de imágenes de resultado incierto.
+
+Los límites mensual y por producción cuentan imágenes finales, no dólares. Se registran proveedor, modelo y tokens reportados separadamente del texto y la voz; las tarifas de Gemini para guion no se aplican a imágenes. Las llamadas aceptadas se guardan y reutilizan; una imagen no se vuelve a cobrar solo por reexportar el video. Las láminas tienen MP4 y PNG descargables.
+
+### Música y voz opcional
+
+En **Diseño y audio de la lámina**, activar o desactivar **Agregar voz que lee el texto**. Sin voz no se llama a ElevenLabs y se usa la duración solicitada. Cargar MP3/WAV de hasta 16 MB o elegir una pista guardada, ajustar volumen y activar música instrumental. La pista se repite o recorta a la duración del video, baja de nivel con narración y se desvanece al final. No se sustituye por un tono de prueba.
+
+Las producciones antiguas conservan sus archivos. Para un nuevo trabajo detenido por imágenes, **Cambiar generador de imágenes** permite elegir proveedor/calidad y ajustar dirección visual antes de continuar, conservando guion y voz.
 
 ## Comprobaciones y límites
 
+La prueba real con GPT Image 2 generó una lámina fotográfica con texto, validó su transcripción y exportó PNG y MP4 de 90 segundos. La prueba de Nano Banana respondió 429 por cuota del proyecto; sus contratos y manejo de caché tienen pruebas simuladas, pero no se afirma haber validado una imagen real de esa cuenta.
+
 Probados perfiles extensos, persistencia de claves y voces, adjuntos eliminables, presupuestos, respuestas Gemini, exportaciones reales de video, música y modo sin narración. `npm test` ejecuta las pruebas automatizadas. La prueba técnica opcional está identificada como tal; su tono nunca se usa como audio de una producción real.
 
-Quedan pendientes publicación Facebook/Instagram, imagen generativa por API, reparto de personajes articulados, ampliar piezas CODE ART por temática y autenticar/conectar una UI remota al Mac. Las temporadas completas y VSL de 300 segundos necesitan pruebas reales de calidad y rendimiento; no se afirma haberlas validado a escala. Vercel puede alojar el panel cuando exista ese puente seguro; el servidor actual no debe exponerse directamente a internet.
+Quedan pendientes publicación Facebook/Instagram, ampliar la evaluación visual de escenas, reparto de personajes articulados, ampliar piezas CODE ART por temática y autenticar/conectar una UI remota al Mac. Las temporadas completas y VSL de 300 segundos necesitan pruebas reales de calidad y rendimiento; no se afirma haberlas validado a escala. Vercel puede alojar el panel cuando exista ese puente seguro; el servidor actual no debe exponerse directamente a internet.
 
 ## Recuperar una revisión detenida
 

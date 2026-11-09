@@ -1,3 +1,4 @@
+import {codeArtSoundEvents} from './code-art-sound.mjs';
 import {readFile,writeFile,mkdir} from 'node:fs/promises';import {spawn} from 'node:child_process';import {once} from 'node:events';import path from 'node:path';
 import {codeArtUrl} from './code-art-resources.mjs';
 import {createCodeArtFrames} from './code-art-frame.mjs';
@@ -5,16 +6,7 @@ const input=JSON.parse(await readFile(process.argv[2],'utf8')),frames=await crea
 await mkdir(input.dir,{recursive:true});
 for(const t of frames.shots.map(s=>Math.min(limit-.01,(s.from+s.to)/2)).filter(t=>t>=0&&t<limit))await writeFile(path.join(input.dir,`revision-${t.toFixed(2)}.jpg`),frames.draw(t).toBuffer('image/jpeg'));
 const [{mezclar,huecos},{leerAudio,escribirWav}]=await Promise.all([import(codeArtUrl('motor/lib/mezcla.mjs')),import(codeArtUrl('motor/lib/comun.mjs'))]);
-const events=[];
-for(const shot of frames.shots){
- const moving=shot.cameraFrom.some((v,i)=>Math.abs(v-shot.cameraTo[i])>.01);
- if(moving)for(let t=shot.from+.15;t<Math.min(shot.to-.2,limit);t+=1.7)events.push({sonido:'aire',t,db:-17,vel:.5,ancla:'empieza',corta:shot.to,que:'Recorrido de cámara'});
- for(const o of shot.objects){const t=frames.words[o.actionWord].inicio;
-  if(o.action==='arrive')events.push({sonido:o.kind==='paper'?'papel':'aire',t:Math.max(shot.from+.1,t-.1),ancla:'empieza',db:-15,vel:.75,corta:shot.to,que:'Entrada '+o.id});
-  if(o.action==='pulse')events.push({sonido:'late',t:t+.18,db:-16,corta:shot.to,que:'Énfasis '+o.id});
-  if(o.action==='reveal')events.push({sonido:'clic',t:t+.1,db:-16,corta:shot.to,que:'Aparición '+o.id});
- }
-}
+const events=codeArtSoundEvents(frames.shots,frames.words,limit);
 const voice=leerAudio(input.audio.file),{pista,usados}=mezclar(events,voice),effects=path.join(input.dir,'effects.wav');escribirWav(effects,pista);
 await writeFile(path.join(input.dir,'sound-review.json'),JSON.stringify({events:usados,gaps:huecos(pista,2)},null,2));
 const {titular,legible}=await import(codeArtUrl('motor/lib/rotulos.mjs'));

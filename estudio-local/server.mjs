@@ -1,9 +1,9 @@
+import {prepareImages,needsImageGeneration} from './image-planner.mjs';
 import {createProductionQueue} from './production-queue.mjs';
 import {needsReviewRecovery,reopenReview,editScriptText} from './recovery.mjs';
-import {romanticNote} from './static-design.mjs';
 import {ensureCodeArt} from './code-art-resources.mjs';
 import http from 'node:http';
-import {usesExactText} from './content.mjs';
+import {usesExactText,isPoster} from './content.mjs';
 import {listVoices,resolveLibraryVoice} from './voices.mjs';
 import { revision } from './revision.mjs';
 const runningRevision=await revision();
@@ -28,7 +28,7 @@ const json=(res,status,data)=>{res.writeHead(status,{'Content-Type':'application
 async function body(req){let size=0,parts=[];for await(const chunk of req){size+=chunk.length;if(size>25*1024*1024)throw new Error('El archivo supera el límite de 25 MB.');parts.push(chunk);}return JSON.parse(Buffer.concat(parts).toString()||'{}');}
 function record(j,message){j.events.unshift({at:new Date().toISOString(),message});j.events=j.events.slice(0,100);store.saveJob(j);}
 function view(j){return {id:j.id,title:j.title,type:j.type,style:j.style,episodes:j.episodes,duration:j.duration,status:j.status,progress:j.progress,error:j.error,profileId:j.profileId,createdAt:j.createdAt,updatedAt:j.updatedAt,maxCredits:j.maxCredits,stage:j.stage||'',pauseRequested:pauses.has(j.id),demo:!!j.demo,scriptCount:j.scripts.length,audioCount:Object.keys(j.audio).length,videos:Object.fromEntries(Object.entries(j.videos).map(([n,v])=>[n,{duration:v.duration,bytes:v.bytes,width:v.width,height:v.height}]))};}
-async function state(){const c=store.settings(),s=store.secrets();return {profiles:store.list('profiles'),music:store.listMusic(),jobs:store.list('jobs').sort((a,b)=>b.createdAt.localeCompare(a.createdAt)).map(view),settings:c,connections:{gemini:!!s.geminiKey,elevenlabs:!!s.elevenKey,n8nToken:!!s.n8nToken,n8n:!!(s.n8nToken&&c.n8nUrl)},usage:store.usage(),accounting:store.accounting(),storage:await storageStatus(c.storageRoot),active:active.size,queued:queue.pending};}
+async function state(){const c=store.settings(),s=store.secrets();return {profiles:store.list('profiles'),music:store.listMusic(),jobs:store.list('jobs').sort((a,b)=>b.createdAt.localeCompare(a.createdAt)).map(view),settings:c,connections:{gemini:!!s.geminiKey,openai:!!s.openaiKey,elevenlabs:!!s.elevenKey,n8nToken:!!s.n8nToken,n8n:!!(s.n8nToken&&c.n8nUrl)},usage:store.usage(),accounting:store.accounting(),storage:await storageStatus(c.storageRoot),active:active.size,queued:queue.pending};}
 async function coordinate(j){
   const c=store.settings(),s=store.secrets();if(!c.useN8n)throw new Error('Conecta n8n para coordinar la producción.');
   const u=new URL(c.n8nUrl);if(u.protocol!=='https:'||u.hostname!=='n8n.planifyx.com')throw new Error('La dirección debe pertenecer a tu instancia n8n.planifyx.com y usar HTTPS.');
@@ -37,15 +37,15 @@ async function coordinate(j){
   const raw=await r.json(),result=Array.isArray(raw)?raw[0]:raw;
   if(result.productionId!==j.id||result.protocolVersion!==1||result.action!==nextAction(j))throw new Error('n8n devolvió una instrucción fuera del contrato esperado.');return result.action;
 }
-async function preflight(j){if(j.style==='2d')await ensureCodeArt();const c=store.settings(),s=store.secrets(),p=store.list('profiles').find(p=>p.id===j.profileId);await requireStorage(c.storageRoot);for(const image of [...(j.referenceImages||[]),...(j.productionImages||[]),...(j.useLogo&&j.logo?[j.logo]:[]),...(j.useMusic&&j.music?[j.music]:[])]){try{await access(image.file);}catch{throw new Error('No se encuentra una imagen adjunta. Conecta el disco donde la guardaste antes de producir.');}}if(j.style==='static'&&usesExactText(j)){if(j.staticDesign==='romantic-note')romanticNote(j.staticText);else letterOverlay(j.staticText);}if(!s.geminiKey)throw new Error('Configura la clave de Gemini.');if(j.narrationEnabled!==false&&!s.elevenKey)throw new Error('Configura la clave de ElevenLabs.');if(j.narrationEnabled!==false&&!p?.voiceId)throw new Error('Selecciona una voz para este perfil.');if(!c.n8nUrl||!s.n8nToken)throw new Error('Configura el workflow coordinador de n8n.');if(store.interruptedCharges(j.id).length)throw new Error('Hay una llamada de resultado incierto. Revisa el proveedor antes de repetir; la aplicación no volverá a cobrarla automáticamente.');}
+async function preflight(j){if(j.style==='2d')await ensureCodeArt();const c=store.settings(),s=store.secrets(),p=store.list('profiles').find(p=>p.id===j.profileId);await requireStorage(c.storageRoot);for(const image of [...(j.referenceImages||[]),...(j.productionImages||[]),...(j.useLogo&&j.logo?[j.logo]:[]),...(j.useMusic&&j.music?[j.music]:[])]){try{await access(image.file);}catch{throw new Error('No se encuentra una imagen adjunta. Conecta el disco donde la guardaste antes de producir.');}}if(needsImageGeneration(j,p)&&j.imageProvider==='openai'&&!s.openaiKey)throw new Error('Guarda la clave de OpenAI en Configuración para usar GPT Image 2.');if(!s.geminiKey)throw new Error('Configura la clave de Gemini.');if(j.narrationEnabled!==false&&!s.elevenKey)throw new Error('Configura la clave de ElevenLabs.');if(j.narrationEnabled!==false&&!p?.voiceId)throw new Error('Selecciona una voz para este perfil.');if(!c.n8nUrl||!s.n8nToken)throw new Error('Configura el workflow coordinador de n8n.');if(store.interruptedCharges(j.id).length)throw new Error('Hay una llamada de resultado incierto. Revisa el proveedor antes de repetir; la aplicación no volverá a cobrarla automáticamente.');}
 async function run(id){let j=store.getJob(id);active.add(id);pauses.delete(id);try{
   j.status='running';j.root=j.root||await requireStorage(store.settings().storageRoot);record(j,j.narrationEnabled===false?'Producción sin narración iniciada. No se consumen créditos de ElevenLabs.':'Producción iniciada. Las voces se generan después de revisar todos los guiones.');
   while(true){if(pauses.has(id)){j.status='paused';record(j,'Pausada después de guardar la etapa actual.');break;}
     const action=await coordinate(j);j.stage=action;store.saveJob(j);
     if(action==='complete'){j.status='ready';j.progress=100;record(j,'Todos los videos y copies están guardados localmente. Publicación Meta pendiente de conectar.');break;}
     if(['bible','outline','script','correct','review'].includes(action))j=await planningStep(store,j,action);
-    else if(action==='voice')j=await voiceStep(store,j,j.root);
-    else if(action==='render'){const n=j.scripts.findIndex((_,i)=>!j.videos[i+1])+1;const profile=store.list('profiles').find(p=>p.id===j.profileId);if(j.style==='2d')j=await codeArtPlanningStep(store,j,n);j.videos[n]=await renderEpisode(j,profile,n,j.root);}
+    else if(action==='voice'){const n=j.scripts.findIndex((_,i)=>!j.audio[i+1])+1;j=await prepareImages(store,j,n);if(pauses.has(id))continue;j=await voiceStep(store,j,j.root);}
+    else if(action==='render'){const n=j.scripts.findIndex((_,i)=>!j.videos[i+1])+1;const profile=store.list('profiles').find(p=>p.id===j.profileId);if(j.style!=='2d')j=await prepareImages(store,j,n);if(pauses.has(id))continue;if(j.style==='2d')j=await codeArtPlanningStep(store,j,n);if(pauses.has(id))continue;j.videos[n]=await renderEpisode(j,profile,n,j.root);}
     j.progress=Math.round((Number(!!j.bible)+Number(!!j.outline)+j.scripts.length+Number(j.reviewPassed)+Object.keys(j.audio).length+Object.keys(j.videos).length)/(3+3*j.episodes)*100);record(j,`Etapa guardada: ${action}.`);
     await writeFile(path.join(j.root,'productions',j.id+'.json'),JSON.stringify(j,null,2)).catch(async e=>{if(e.code!=='ENOENT')throw e;await mkdir(path.join(j.root,'productions'),{recursive:true});await writeFile(path.join(j.root,'productions',j.id+'.json'),JSON.stringify(j,null,2));});
   }
@@ -72,9 +72,9 @@ const server=http.createServer(async(req,res)=>{try{
   if(req.method==='POST'){
     const data=await body(req);
     if(url.pathname==='/api/profiles')store.addProfile(data);
-    else if(url.pathname==='/api/jobs'){if(data.style==='static'&&usesExactText(data)){if(data.staticDesign==='romantic-note')romanticNote(data.staticText);else letterOverlay(data.staticText);}store.addJob(data);}
+    else if(url.pathname==='/api/jobs'){store.addJob(data);}
     else if(url.pathname==='/api/settings'){
-      const config=z.object({storageRoot:z.string().min(1).max(1000),voiceModel:z.enum(['eleven_flash_v2_5','eleven_multilingual_v2']),monthlyCredits:z.number().int().min(100).max(30000),monthlyTextTokens:z.number().int().min(1000).max(100000000).default(500000),n8nUrl:z.union([z.literal(''),z.string().url()]),useN8n:z.boolean().default(true)}).parse(data);
+      const config=z.object({storageRoot:z.string().min(1).max(1000),voiceModel:z.enum(['eleven_flash_v2_5','eleven_multilingual_v2']),monthlyCredits:z.number().int().min(100).max(30000),monthlyImages:z.number().int().min(1).max(10000).default(100),monthlyTextTokens:z.number().int().min(1000).max(100000000).default(500000),n8nUrl:z.union([z.literal(''),z.string().url()]),useN8n:z.boolean().default(true)}).parse(data);
       if(active.size)throw new Error('Espera a que termine el trabajo antes de cambiar la configuración.');
       if(config.n8nUrl){const u=new URL(config.n8nUrl);if(u.protocol!=='https:'||u.hostname!=='n8n.planifyx.com')throw new Error('Usa la URL HTTPS de tu instancia n8n.planifyx.com.');}
       const selected=path.resolve(config.storageRoot);if(selected===path.parse(selected).root)throw new Error('Selecciona una carpeta de biblioteca, no la raíz del disco.');await access(path.dirname(selected));await mkdir(selected,{recursive:true});config.storageRoot=await requireStorage(selected);store.saveSettings(config,data.secrets||{});
@@ -130,6 +130,11 @@ const server=http.createServer(async(req,res)=>{try{
       const j=store.getJob(data.id);if(j.status==='ready')throw new Error('Este trabajo ya terminó.');
       if(active.has(j.id)){pauses.add(j.id);record({...j},'Pausa solicitada; se aplicará al terminar la etapa en curso.');}
       else{queue.remove(j.id);pauses.delete(j.id);j.status='paused';record(j,'Pausada. Los avances se conservan y no bloquea las demás producciones.');}
+    }
+    else if(url.pathname==='/api/visual-settings'){
+      const j=store.getJob(data.id);if(active.has(j.id)||queue.current===j.id||queue.pending.includes(j.id)||j.status==='ready')throw new Error('Pausa el trabajo antes de cambiar sus imágenes. Para un video terminado crea otra versión.');
+      if(j.style==='2d')throw new Error('Este ajuste es para imágenes de IA, no para el motor 2D.');
+      const visual=z.object({imageProvider:z.enum(['gemini','openai']),imageQuality:z.enum(['medium','high']),imageDirection:z.string(),maxImages:z.number().int().min(1).max(1000)}).parse(data);Object.assign(j,visual,{generatedImages:{},error:null,status:'paused'});record(j,'Generador de imágenes actualizado. Se conservan el guion y la voz.');
     }
     else if(url.pathname==='/api/job-script'){
       const j=store.getJob(data.id);if(active.has(j.id)||queue.current===j.id||queue.pending.includes(j.id))throw new Error('Pausa este trabajo antes de editar el guion.');

@@ -29,7 +29,7 @@ Comprobado: perfiles, claves persistentes, voces en español, presupuestos y con
 
 El modo 2D importa recursos originales mediante una [integración inicial de CODE ART](docs/CODE_ART_LOCAL.md), con un catálogo acotado de objetos y salida 1080×1920/60 fps.
 
-En movimiento se animan imágenes propias o se usan ilustraciones reutilizables de plantilla. No hay generación automática de fotografías por IA. Facebook/Instagram, personajes 2D avanzados y la conexión segura de una UI remota con el Mac siguen pendientes.
+En movimiento se animan imágenes propias o imágenes generadas por escena. Las poesías se producen como imágenes completas con texto mediante Nano Banana o GPT Image 2, con movimiento opcional. La integración tiene pruebas de contrato, caché, cuotas y exportación; las pruebas visuales reales dependen del acceso y cuota de las cuentas de imágenes. Facebook/Instagram, personajes 2D avanzados y la conexión segura de una UI remota con el Mac siguen pendientes.
 
 La interfaz utiliza la dirección visual recuperada de Smart Growth Online / Synapse: fondo azul noche, paneles glass y acentos teal, azul eléctrico y violeta. Los valores de implementación y su origen están en [Diseño](docs/DISENO.md). El acabado se seguirá revisando con el propietario.
 

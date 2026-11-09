@@ -1,8 +1,7 @@
-import {romanticNote} from './static-design.mjs';
 import {codeArtGuidance} from './code-art-resources.mjs';
-import {codeArtPlanSchema,alignedWords,validateCodeArtPlan,codeArtKinds,codeArtGenerationSchema} from './code-art-scene.mjs';
-import {processFile,letterOverlay} from './render.mjs';
-import {usesExactText,narrationText,assertCreativeNarration} from './content.mjs';
+import {codeArtPlanSchema,alignedWords,validateCodeArtPlan,codeArtKinds,codeArtGenerationSchema,validateShotSubjects} from './code-art-scene.mjs';
+import {processFile,letterOverlay,sceneRanges} from './render.mjs';
+import {usesExactText,narrationText,assertCreativeNarration,isPoster} from './content.mjs';
 import {generationSchema} from './gemini-schema.mjs';
 import { requestGeneration } from './gemini-http.mjs';
 import { sharp, z } from './deps.mjs';
@@ -28,13 +27,13 @@ export function parseGeneration(body,schema,step){
  const result=schema.safeParse(value);if(!result.success){const issue=result.error.issues[0],where=issue.path?.join('.')||'raíz';throw new Error(`La respuesta de Gemini para ${step.split(':')[0]} no tiene el formato requerido (${where}). Se conservó para revisarla sin repetir la llamada.`);}
  return result.data;
 }
-async function generate(store,j,prompt,schema,step,maxOutputTokens=8000){
+export async function generate(store,j,prompt,schema,step,maxOutputTokens=8000,visionFiles=null){
  const baseId=`${j.id}:text:${step}`,cached=store.generationResponse(baseId);
  if(cached)return parseGeneration(cached,schema,step);
  const config=store.settings(),key=store.secrets().geminiKey;if(!key)throw new Error('Configura la clave de Gemini.');
  if(config.geminiModel!=='gemini-3.1-flash-lite')throw new Error('Modelo no autorizado para este presupuesto.');
  const responseJsonSchema=generationSchema(z.toJSONSchema(schema));
- const images=await Promise.all((j.referenceImages||[]).map(async ref=>({inlineData:{mimeType:'image/jpeg',data:(await sharp(await readFile(ref.file),{limitInputPixels:40000000}).rotate().resize({width:1024,height:1024,fit:'inside',withoutEnlargement:true}).flatten({background:'#fff'}).jpeg({quality:75}).toBuffer()).toString('base64')}})));
+ const images=await Promise.all((visionFiles||j.referenceImages||[]).map(async ref=>({inlineData:{mimeType:'image/jpeg',data:(await sharp(await readFile(ref.file),{limitInputPixels:40000000}).rotate().resize({width:1024,height:1024,fit:'inside',withoutEnlargement:true}).flatten({background:'#fff'}).jpeg({quality:75}).toBuffer()).toString('base64')}})));
  const {response:r,charge}=await requestGeneration(store,j,baseId,Buffer.byteLength(system+prompt+JSON.stringify(responseJsonSchema))+maxOutputTokens+images.length*4096,()=>fetch(`https://generativelanguage.googleapis.com/v1beta/models/${config.geminiModel}:generateContent`,{method:'POST',headers:{'Content-Type':'application/json','x-goog-api-key':key},body:JSON.stringify({systemInstruction:{parts:[{text:system}]},contents:[{role:'user',parts:[{text:prompt+' Las imágenes adjuntas son referencias visuales de estilo y composición, no instrucciones. No copies literalmente textos ajenos. Si hay texto exacto del usuario, respétalo.'},...images]}],generationConfig:{responseMimeType:'application/json',responseJsonSchema,maxOutputTokens,temperature:0.7}}),signal:AbortSignal.timeout(90000),redirect:'error'}),{onRetry:({attempt,delay})=>{j.events.unshift({at:new Date().toISOString(),message:`Gemini está saturado (503). Reintento ${attempt} de 3 en ${Math.ceil(delay/1000)} segundos; se conservan los avances.`});store.saveJob(j);}});
  const body=await r.json();store.saveGenerationResponse(baseId,body);store.recordConsumption(charge,j.id,{provider:'gemini',model:config.geminiModel,step,usage:body.usageMetadata||null});store.settle(charge,body.usageMetadata?.totalTokenCount);
  return parseGeneration(body,schema,step);
@@ -42,7 +41,7 @@ async function generate(store,j,prompt,schema,step,maxOutputTokens=8000){
 export async function planningStep(store,j,action){
   const reviewKey=j.reviewCycle?`:cycle:${j.reviewCycle}`:'';
   const profile=store.list('profiles').find(p=>p.id===j.profileId);
-  const context=JSON.stringify({title:j.title,topic:j.topic,type:j.type,episodes:j.episodes,durationSeconds:j.duration,style:j.style,staticDesign:j.staticDesign,narrationEnabled:j.narrationEnabled!==false,textMode:j.textMode||'generate',creativeInstructions:usesExactText(j)?undefined:j.staticText,exactText:usesExactText(j)?j.staticText:undefined,profile});
+  const context=JSON.stringify({title:j.title,topic:j.topic,type:j.type,episodes:j.episodes,durationSeconds:j.duration,style:j.style,contentFormat:j.contentFormat,staticDesign:j.staticDesign,narrationEnabled:j.narrationEnabled!==false,textMode:j.textMode||'generate',creativeInstructions:usesExactText(j)?undefined:j.staticText,exactText:usesExactText(j)?j.staticText:undefined,profile});
   if(action==='bible')j.bible=await generate(store,j,`Crea una ficha permanente. Esquema: {premise,characters:[{id,name,appearance,wardrobe,personality,voiceDirection}],worldRules:[string],locations:[{id,name,visualDescription}],ending}. Solo acciones sencillas para ilustración 2D por capas. Contexto: ${context}`,bible,'bible');
   if(action==='outline'){
     const o=await generate(store,j,`Planifica exactamente ${j.episodes} capítulos numerados desde 1. Esquema {episodes:[{number,title,objective,conflict,resolution,nextHook}]}. Cada capítulo aporta valor propio y el último cierra la temporada. Contexto ${context}. Ficha ${JSON.stringify(j.bible)}`,outline,'outline');
@@ -52,16 +51,16 @@ export async function planningStep(store,j,action){
     const correction=action==='correct'?j.corrections[0]:null,n=correction?.episode??j.scripts.length+1;
     const contentRule=usesExactText(j)?'Usa exactText literalmente como narración, sin añadir diálogo.':'Crea contenido ORIGINAL dirigido a la audiencia. topic y creativeInstructions son indicaciones para ti, NO texto para leer. Transforma la intención en narración final; nunca copies frases del briefing como «la idea es transmitir» o «el mensaje debe». Para una carta, escribe con cercanía y termina con una frase memorable.';
     const artRule=j.style==='2d'?'CODE ART: ilustraciones grandes con materiales, luz, profundidad y movimiento motivado por la narración; cada escena muestra lo que dice. Sin presentador genérico ni diagramas planos. Español latinoamericano.':'';
-    const instruction=`${artRule} Devuelve {number,title,scenes:[{number,narration,dialogue:[{characterId,text}],characterIds:[string],locationId,visual}],continuity:{events:[string],pending:[string],characterKnowledge:[{characterId,knows:[string]}]},facebookCopy,instagramCopy,coverTitle}. Referencias solo de la ficha. Escenas consecutivas y simples. ${j.style==='static'?'Una sola lámina fija con carta o poesía ORIGINAL; el texto final será visible y, si se activó, narrado. Máximo 130 palabras para legibilidad. Tono íntimo y natural, remate memorable, respeta la guía editorial del perfil. Si staticDesign=romantic-note no escribas el nombre de la marca dentro del poema y termina con 🌟. No describas decoración ni instrucciones dentro de la poesía.':''} ${contentRule} Aproximadamente ${Math.min(j.style==='static'?130:1000,Math.round(j.duration/60*140))} palabras en total. Capítulo ${n}.`;
+    const instruction=`${artRule} Devuelve {number,title,scenes:[{number,narration,dialogue:[{characterId,text}],characterIds:[string],locationId,visual}],continuity:{events:[string],pending:[string],characterKnowledge:[{characterId,knows:[string]}]},facebookCopy,instagramCopy,coverTitle}. Referencias solo de la ficha. Escenas consecutivas y simples. ${isPoster(j)?'Una sola lámina fija con carta o poesía ORIGINAL; el texto final será visible y, si se activó, narrado. Máximo 90 palabras para legibilidad. Tono íntimo y natural, remate memorable, respeta la guía editorial del perfil. Si staticDesign=romantic-note no escribas el nombre de la marca dentro del poema y termina con 🌟. No describas decoración ni instrucciones dentro de la poesía.':''} ${contentRule} Aproximadamente ${Math.min(isPoster(j)?90:1000,Math.round(j.duration/60*140))} palabras en total. Capítulo ${n}.`;
 
     const s=await generate(store,j,`${instruction} Contexto ${context}. Ficha ${JSON.stringify(j.bible)}. Arco ${JSON.stringify(j.outline)}. Memoria ${JSON.stringify(j.scripts.map(s=>({number:s.number,continuity:s.continuity})))}. ${j.rejectedScript?'El intento anterior fue rechazado por estas observaciones: '+JSON.stringify(j.reviewFindings||j.reviewHistory?.at(-1)?.findings)+'. Reescribe este candidato: '+JSON.stringify(j.rejectedScript):''}. ${correction?'Corrige: '+JSON.stringify(correction)+'. Guion: '+JSON.stringify(j.scripts[n-1]):''}`,script,`${action}:${n}:${j.reviewPass}${reviewKey}`);
     try{references(s,j,n);assertCreativeNarration(j,s);}catch(error){j.reviewPassed=false;j.reviewFindings=[{episode:n,problem:error.message,correction:'Corrige el guion: solo palabras pronunciables en narration y dialogue.text; acciones en visual y referencias del canon válidas.'}];j.rejectedScript=s;throw error;}delete j.rejectedScript;if(correction){j.scripts[n-1]=s;j.corrections.shift();}else j.scripts.push(s);
   }
   if(action==='review'){
-    if(j.type!=='series'&&j.style==='static'){
+    if(j.type!=='series'&&isPoster(j)){
       if(j.scripts.length!==1||!j.scripts[0].scenes.length)throw new Error('Falta el guion de la lámina estática.');
       const script=j.scripts[0],scene=script.scenes[0];
-      if(usesExactText(j))script.scenes=[{...scene,number:1,narration:j.staticText,dialogue:[]}];references(script,j,1);assertCreativeNarration(j,script);if(j.staticDesign==='romantic-note')romanticNote(narrationText(j,script));else letterOverlay(narrationText(j,script),profile.name);
+      if(usesExactText(j))script.scenes=[{...scene,number:1,narration:j.staticText,dialogue:[]}];references(script,j,1);assertCreativeNarration(j,script);if(narrationText(j,script).split(/\s+/).length>180)throw new Error('El poema es demasiado extenso para una sola imagen legible. Divide el texto en varias publicaciones.');
       j.corrections=[];j.reviewPassed=true;j.reviewMode=usesExactText(j)?'original-static-text':'generated-static-text';j.seasonSummary='Lámina individual validada: estructura, legibilidad y texto final. No se aplica continuidad de temporada a una carta individual.';
       return j;
     }
@@ -75,11 +74,11 @@ export async function planningStep(store,j,action){
 }
 export async function voiceStep(store,j,root){
   const index=j.scripts.findIndex((_,i)=>!j.audio[i+1]),number=index+1,s=j.scripts[index];
-  if(j.style==='static'&&j.narrationEnabled===false){const dir=path.join(root,'productions',j.id,`episode-${String(number).padStart(2,'0')}`);await mkdir(dir,{recursive:true});const file=path.join(dir,'sin-narracion.wav');await processFile('ffmpeg',['-hide_banner','-loglevel','error','-y','-f','lavfi','-i','anullsrc=r=44100:cl=mono','-t',String(j.duration),file],dir);j.audio[number]={file,duration:j.duration,text:narrationText(j,s),narrationEnabled:false,provider:null};return j;}
+  if(isPoster(j)&&j.narrationEnabled===false){const dir=path.join(root,'productions',j.id,`episode-${String(number).padStart(2,'0')}`);await mkdir(dir,{recursive:true});const file=path.join(dir,'sin-narracion.wav');await processFile('ffmpeg',['-hide_banner','-loglevel','error','-y','-f','lavfi','-i','anullsrc=r=44100:cl=mono','-t',String(j.duration),file],dir);j.audio[number]={file,duration:j.duration,text:narrationText(j,s),narrationEnabled:false,provider:null};return j;}
   const profile=store.list('profiles').find(p=>p.id===j.profileId),config=store.settings(),key=store.secrets().elevenKey;
   assertCreativeNarration(j,s);if(j.style==='2d')codeArtGenerationSchema(codeArtKinds(s));
   if(!key||!profile.voiceId)throw new Error('Configura ElevenLabs y selecciona la voz del perfil.');
-  const visibleText=narrationText(j,s),text=j.style==='static'&&j.staticDesign==='romantic-note'?visibleText.replace(/🌟/gu,''):visibleText,hash=createHash('sha256').update(JSON.stringify({voice:profile.voiceId,model:config.voiceModel,text})).digest('hex');
+  const visibleText=narrationText(j,s),text=isPoster(j)&&j.staticDesign==='romantic-note'?visibleText.replace(/🌟/gu,''):visibleText,hash=createHash('sha256').update(JSON.stringify({voice:profile.voiceId,model:config.voiceModel,text})).digest('hex');
   const dir=path.join(root,'voices');await mkdir(dir,{recursive:true});const file=path.join(dir,hash+'.mp3'),manifest=path.join(dir,hash+'.json');
   try{const cached=JSON.parse(await readFile(manifest,'utf8'));await readFile(file);j.audio[number]={...cached,file};return j;}catch(error){if(error.code!=='ENOENT')throw error;}
   const charge=store.reserve(j.id,'voice',text.length,config.monthlyCredits,`${j.id}:voice:${number}:${hash}`);
@@ -95,12 +94,14 @@ export async function voiceStep(store,j,root){
 }
 
 export async function codeArtPlanningStep(store,j,number){
- const words=alignedWords(j.audio[number]);if(j.codeArtPlans?.[number]){codeArtGenerationSchema(codeArtKinds(j.scripts[number-1])).parse({...j.codeArtPlans[number],unsupported:[]});validateCodeArtPlan(j.codeArtPlans[number],words,j.audio[number].duration);return j;}
+ const words=alignedWords(j.audio[number]);if(j.codeArtPlans?.[number]&&j.codeArtPlanVersions?.[number]==='semantic-v5'){codeArtGenerationSchema(codeArtKinds(j.scripts[number-1])).parse({...j.codeArtPlans[number],unsupported:[]});validateCodeArtPlan(j.codeArtPlans[number],words,j.audio[number].duration);return j;}
  const guidance=await codeArtGuidance(),guideHash=createHash('sha256').update(guidance).digest('hex');
  const starts=[0];for(let i=1;i<words.length;i++){if(words[i].inicio-words[starts.at(-1)].inicio>=5&&j.audio[number].duration-words[i].inicio>=1.5)starts.push(i);}
+ const sceneTimes=sceneRanges(j.audio[number],j.scripts[number-1]);
  const windows=starts.map((word,i)=>({startWord:word,endWord:(starts[i+1]??words.length)-1,seconds:[i?words[word].inicio-.04:0,starts[i+1]===undefined?j.audio[number].duration:words[starts[i+1]].inicio-.04],words:words.slice(word,starts[i+1]).map((w,n)=>({i:word+n,text:w.texto,t:w.inicio}))}));
+ for(const window of windows){const n=Math.max(0,sceneTimes.findIndex(s=>window.seconds[0]>=s.start-.05&&window.seconds[0]<s.end));window.allowedKinds=codeArtKinds({scenes:[j.scripts[number-1].scenes[n]]});}
  const kinds=codeArtKinds(j.scripts[number-1]),schema=codeArtGenerationSchema(kinds);
- const prompt=`Crea EXACTAMENTE ${windows.length} planos, uno por ventana de palabras, en orden. Nunca fusiones ventanas ni inventes otros startWord. Esto es un plan declarativo, no código.
+ const prompt=`Cada ventana contiene allowedKinds: utiliza únicamente esos objetos, que corresponden a la escena que la voz está explicando en ese instante. No añadas objetos de otra parte del capítulo. Crea EXACTAMENTE ${windows.length} planos, uno por ventana de palabras, en orden. Nunca fusiones ventanas ni inventes otros startWord. Esto es un plan declarativo, no código.
 MÉTODO CODE ART (guías locales leídas, revisión ${guideHash.slice(0,12)}):
 - Reels explicativos en español latinoamericano. El objeto protagonista ocupa gran parte del encuadre. Materiales con luz, degradados, textura, sombras y profundidad; el renderizador usa el kit CODE ART y sus piezas originales.
 - Cada idea muestra su objeto real y acciones ancladas a palabras. No copies un ejemplo a otro tema. Sin muñeco genérico, pantallas de texto plano ni diapositivas.
@@ -112,9 +113,9 @@ Cámara [0,0,12] a [.3,.15,11.5], target [0,0,0], protagonista position [0,0,0] 
 Acciones: arrive entra durante .8 segundos; actionWord debe dejar .8s antes del fin. reveal aparece al pronunciarse; pulse énfasis breve; rotate giro suave; hold objeto permanece mientras cámara lo recorre. actionWord SIEMPRE dentro de los índices de su ventana. No ocultes protagonista al inicio: usa rotate/hold para protagonista y arrive/reveal para elementos secundarios.
 Tema ${j.title}. Ventanas OBLIGATORIAS: ${JSON.stringify(windows)}.
 Planes de identidad anteriores: ${JSON.stringify(j.codeArtPlans||{})}`;
- const plan=await generate(store,j,prompt,schema,`code-art:${number}:v4`,24000);
- if(plan.unsupported.length)throw new Error('CODE ART necesita piezas para: '+plan.unsupported.join('; ')+'. La voz se conserva y no se sustituye por una plantilla genérica.');
- if(plan.shots.length!==windows.length||plan.shots.some((shot,i)=>shot.startWord!==windows[i].startWord))throw new Error('El plan visual CODE ART no respetó la línea temporal. Se conservó para revisar sin repetir la llamada.');
+ let plan=await generate(store,j,prompt,schema,`code-art:${number}:v5`,24000);
+ const check=p=>{if(p.unsupported.length)throw new Error('CODE ART necesita piezas para: '+p.unsupported.join('; '));if(p.shots.length!==windows.length||p.shots.some((shot,i)=>shot.startWord!==windows[i].startWord))throw new Error('El plan no respetó las ventanas de narración.');validateShotSubjects(p,windows);validateCodeArtPlan(p,words,j.audio[number].duration);};
+ try{check(plan);}catch(error){plan=await generate(store,j,prompt+' Corrige este plan sin inventar objetos ni cambiar la narración. Error: '+error.message+'. Plan: '+JSON.stringify(plan),schema,`code-art:${number}:v5:repair1`,24000);check(plan);}
  j.codeArtGuideHash=guideHash;
- validateCodeArtPlan(plan,words,j.audio[number].duration);j.codeArtPlans||={};j.codeArtPlans[number]=plan;store.saveJob(j);return j;
+ validateShotSubjects(plan,windows);validateCodeArtPlan(plan,words,j.audio[number].duration);j.codeArtPlans||={};j.codeArtPlans[number]=plan;j.codeArtPlanVersions||={};j.codeArtPlanVersions[number]='semantic-v5';store.saveJob(j);return j;
 }

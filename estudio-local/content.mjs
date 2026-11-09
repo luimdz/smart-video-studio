@@ -1,3 +1,4 @@
+export const isPoster=job=>job.style==='static'||job.contentFormat==='poetry';
 export const usesExactText=job=>job.textMode==='verbatim'&&!!job.staticText?.trim();
 export const spokenScript=script=>script.scenes.map(s=>[s.narration,...s.dialogue.map(d=>d.text)].filter(Boolean).join(' ')).join('\n\n');
 export const narrationText=(job,script)=>usesExactText(job)?job.staticText:spokenScript(script);
