@@ -25,7 +25,9 @@ En una copia nueva del repositorio, se necesitan Node.js 22.13 o posterior y FFm
 
 ## Estado real
 
-Comprobado: perfiles, claves persistentes, voces en español, presupuestos y consumo conciliado, generación de guiones, audio ElevenLabs y exportación MP4 local. Incluye logo opcional, referencias visuales, imágenes de producción, modos de texto creativo/literal y láminas estáticas. Se han exportado videos reales con voz y logo.
+Comprobado: perfiles, claves persistentes, voces en español, presupuestos y consumo conciliado, generación de guiones, audio ElevenLabs y exportación MP4 local. Incluye logo opcional, referencias visuales, imágenes de producción, modos de texto creativo/literal y láminas estáticas con PNG, música cargada y narración opcional. Se han exportado videos reales con voz y logo.
+
+El modo 2D importa recursos originales mediante una [integración inicial de CODE ART](docs/CODE_ART_LOCAL.md), con un catálogo acotado de objetos y salida 1080×1920/60 fps.
 
 En movimiento se animan imágenes propias o se usan ilustraciones reutilizables de plantilla. No hay generación automática de fotografías por IA. Facebook/Instagram, personajes 2D avanzados y la conexión segura de una UI remota con el Mac siguen pendientes.
 

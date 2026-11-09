@@ -1,49 +1,34 @@
-# Smart Studio · primera versión local
+# Smart Studio · motor local
 
-Interfaz y servicio independientes del alojamiento anterior. Abre **Iniciar Smart Studio.command** con doble clic y conserva abierta la ventana que inicia el servicio. El panel abre en `http://127.0.0.1:4317`. También se puede iniciar con `npm start` desde esta carpeta.
+Abrir **Iniciar Smart Studio.command**. El panel funciona en `http://127.0.0.1:4317` con el Mac encendido. Requiere Node >=22.13, FFmpeg/ffprobe y `npm ci` dentro de esta carpeta. Las claves cifradas, SQLite, recursos y archivos producidos permanecen locales; no subir `.state/`, `resources/code-art/` ni `outputs/` al alojamiento web.
 
-Requiere Node 22.13 o posterior, FFmpeg/ffprobe y las dependencias propias de esta carpeta. Para instalar desde GitHub, ejecutar `npm ci` dentro de `estudio-local`; el archivo `package-lock.json` fija las versiones. No depende de instalar el prototipo de `plataforma/`. No copiar `.state/` ni `outputs/` al alojamiento web o a un repositorio.
+## Producción
 
-## Qué está comprobado
+La UI crea perfiles, videos, temporadas de 10–25 capítulos y VSL de 120–300 segundos. El Mac consulta el coordinador n8n por cada transición, escribe ficha y arco, genera todos los guiones y revisa continuidad antes de generar las voces. Hay una voz de narrador por perfil. Se conservan respuestas de Gemini, voz y tiempos para reanudar sin repetir etapas confirmadas. El consumo se concilia con los datos reportados por los proveedores.
 
-- Panel local en español, perfiles, solicitudes de video/temporada/VSL y configuración desde formularios.
-- Persistencia real con SQLite y comprobaciones de duración, capítulos, duplicados y cuotas.
-- Guardado cifrado de claves en este equipo. La clave de cifrado está en `.state/key`; su protección depende también del acceso al disco. No es una bóveda externa ni sustituye las medidas del sistema operativo.
-- Exportación real de prueba de 8 segundos, 720 × 1280, con ilustración de presentador y un tono sintético. Se verificaron video, audio y duración mediante ffprobe; no usó Gemini ni ElevenLabs.
-- Coordinador n8n creado, estructura validada y prueba manual de contrato con resultado `bible` y estado `success` (ejecución 7249955).
-- Seis pruebas automáticas de solicitudes, cuotas, orden de revisión y almacenamiento de claves pasaron.
+El coordinador de esta instalación está configurado y publicado: [workflow](https://n8n.planifyx.com/workflow/W0Yov0Nebhvtaa1M). En instalaciones nuevas, guardar las claves y el webhook en **Configuración** y configurar Header Auth `X-Studio-Token` con el token del estudio. n8n recibe estados y contadores, no las claves de Gemini/ElevenLabs ni los medios.
 
-## Para la primera producción real
+Una producción simultánea. Las pausas se aplican al terminar una etapa. Una llamada de resultado incierto bloquea el reenvío; respuestas 503 explícitas admiten reintentos acotados y liberan su propia reserva. Los límites locales no equivalen al saldo del proveedor.
 
-1. Abrir Configuración. Guardar las API keys de Gemini y ElevenLabs. No compartirlas en el chat. El modelo de texto inicial es `gemini-3.1-flash-lite`.
-2. La carpeta de biblioteca puede ser la actual o una carpeta del SSD externo. Los discos externos no estaban conectados durante la comprobación. No cambiar de ubicación proyectos existentes manualmente sin actualizar sus referencias.
-3. En Configuración, usar «Generar / copiar token para n8n». Se genera una clave aleatoria local o se copia la existente, sin rotarla. En el nodo «Estado desde el Mac» del [coordinador](https://n8n.planifyx.com/workflow/W0Yov0Nebhvtaa1M), seleccionar una credencial **Header Auth** con nombre de cabecera `X-Studio-Token` y pegar ese valor. El flujo permanece desactivado hasta configurar y publicar. No reutilizar una API key de otro proveedor como token de entrada.
-4. URL de producción del coordinador: `https://n8n.planifyx.com/webhook/smart-studio-coordinar`. Está precargada en esta instalación, pero no estará operativa hasta publicar el workflow.
-5. En Perfiles y marcas, seleccionar «Elegir voz» para consultar las voces accesibles y asignar una al perfil. Esta consulta no genera una muestra de voz.
-6. Añadir imágenes propias al perfil para imágenes con movimiento. La plantilla 2D inicial es un presentador ilustrado básico; todavía no interpreta toda la apariencia del canon ni ofrece un reparto de personajes articulados.
-7. Guardar un video individual de 90 segundos, revisar su límite de créditos y pulsar Producir. Esta prueba sí consumirá APIs. Todavía no se ha realizado.
+## Estilos visuales
 
-## Cómo funciona
+- **Imágenes con movimiento:** anima y alterna imágenes de producción propias. Las referencias orientan a Gemini y no se convierten automáticamente en fondos. Sin imágenes se usan ilustraciones locales; no fotografías generadas por API.
+- **Lámina estática:** carta clara o nota romántica ilustrada con papel, rosas rosadas, velas y bokeh. Genera contenido original o utiliza texto exacto cuando se selecciona explícitamente. Guarda MP4 y PNG descargables desde el detalle.
+- **CODE ART 2D:** integración inicial del kit, materiales, piezas, cámara, subtítulos Figtree y mezcla de efectos originales. Plan visual declarativo sincronizado con las palabras de ElevenLabs; render local 1080×1920 a 60 fps. El presentador provisional se retiró de producción. Ver [alcance y recursos](../docs/CODE_ART_LOCAL.md).
 
-El Mac hace llamadas salientes al webhook n8n por cada transición. n8n devuelve una instrucción tipada; el servicio local comprueba que coincida con el estado persistido. No se necesita exponer una API del Mac a internet. n8n recibe identificador, indicadores y contadores; los medios y las claves de proveedores no entran en el workflow.
+### Poesía con música, con o sin voz
 
-La planificación escribe ficha, arco y todos los guiones, y revisa continuidad antes de generar voces. En esta versión hay una voz de narrador por perfil. El sistema conserva voces y tiempos; las escenas de imagen o presentador se montan localmente con captions y movimiento. La duración real depende de la voz, y no se debe dar por idéntica a la duración solicitada. Una voz que exceda 300 segundos bloquea el render.
+En **Crear contenido → Lámina estática → Diseño y audio de la lámina**:
 
-Una ejecución simultánea. La pausa se aplica después de guardar la etapa actual. Al reiniciar, los trabajos en curso quedan pausados. Las llamadas de recepción incierta conservan una reserva y bloquean el reenvío automático; aún falta una herramienta administrativa para resolver esas reservas desde la UI. Las respuestas de proveedor con errores de entrada/permisos/cuota conocidos liberan la reserva de esa llamada.
+1. Seleccionar diseño.
+2. Activar o desactivar **Agregar voz que lee el texto**. Sin voz no se llama a ElevenLabs ni se necesita una voz asignada; se mantiene la duración solicitada. Gemini sigue escribiendo el contenido cuando corresponda.
+3. Activar **Agregar música instrumental** y cargar MP3/WAV de hasta 16 MB o seleccionar una pista guardada. La pista se conserva en la biblioteca local para próximas producciones.
+4. Ajustar volumen. La música se repite si es corta, se recorta a la duración del video y se desvanece al final. Con narración se mezcla a menor nivel.
 
-Los límites mostrados son reservas de la aplicación; no son el saldo leído de ElevenLabs. Se reserva conservadoramente un crédito por carácter de texto de voz, incluso si el proveedor aplica un descuento. Texto usa una reserva mensual conservadora de 500.000 unidades de tokens máximos estimados; no se presenta como costo real facturado en dólares.
+No se incluye una canción de muestra ni se sustituye la música por un tono sintético. Se utiliza el archivo que seleccione el usuario. El diseño romántico es ilustración local; los fondos fotográficos generados por API todavía no están conectados.
 
-## Qué falta
+## Comprobaciones y límites
 
-- Configurar y verificar claves reales y la credencial del webhook; probar el circuito completo con proveedores.
-- Confirmar calidad y duración con videos de 90 segundos y VSL de 300 segundos; probar diez y después 25 capítulos reales.
-- Voz distinta por personaje, biblioteca articulada 2D, imagen generativa, selección de imagen por escena y edición avanzada de guiones.
-- Integración ejecutada de CODE ART, Sloth o Concat; esta primera plantilla no es una integración de esos programas.
-- Calendario y publicación Facebook/Instagram, métricas y recuperación administrativa de llamadas inciertas.
-- Acceso por `studio.smartgowth.online`, despliegue Netlify y login remoto. El servicio actual es exclusivamente local, no debe exponerse directamente en una IP pública.
+Probados perfiles extensos, persistencia de claves y voces, adjuntos eliminables, presupuestos, respuestas Gemini, exportaciones reales de video, música y modo sin narración. `npm test` ejecuta las pruebas automatizadas. La prueba técnica opcional está identificada como tal; su tono nunca se usa como audio de una producción real.
 
-El frontend de esta primera entrega es HTML/CSS/JavaScript, servido por Node. El panel puede alojarse como estático en una etapa posterior, pero necesita resolver autenticación y acceso remoto al estado; subir estos archivos por sí solo no convierte el motor local en un servicio remoto.
-
-## Verificación
-
-`npm test` comprueba reservas, duplicados, orden de producción y formatos de solicitudes. También se verificó por HTTP el rechazo de peticiones sin sesión o con origen externo, la persistencia de una temporada, el bloqueo sin claves y la entrega parcial del MP4 para reproducción. En Chrome se comprobó el formulario, la persistencia tras recargar, el mensaje de claves pendientes dentro del diálogo y la reproducción del video. Las pruebas no equivalen a una ejecución audiovisual pagada. Datos privados y archivos generados están ignorados por Git; no incluirlos en paquetes de despliegue.
+Quedan pendientes publicación Facebook/Instagram, imagen generativa por API, reparto de personajes articulados, ampliar piezas CODE ART por temática y autenticar/conectar una UI remota al Mac. Las temporadas completas y VSL de 300 segundos necesitan pruebas reales de calidad y rendimiento; no se afirma haberlas validado a escala. Vercel puede alojar el panel cuando exista ese puente seguro; el servidor actual no debe exponerse directamente a internet.
