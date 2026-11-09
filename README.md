@@ -1,6 +1,6 @@
 # Smart Video Studio
 
-Aplicación interna para automatizar la producción de videos, mini series y micro VSL. Esta es una primera implementación en desarrollo: no está desplegada en Netlify/Vercel ni conectada a las APIs reales del propietario.
+Aplicación interna para automatizar la producción de videos, mini series y micro VSL. La aplicación vigente produce y guarda los medios en el Mac. La conexión y las pruebas reales de Gemini y ElevenLabs ya se realizaron; el panel remoto para Vercel continúa pendiente de adaptación.
 
 **Empieza por la [guía paso a paso](docs/INICIO_PASO_A_PASO.md).** Explica dónde están los archivos, cómo abrir la aplicación, dónde está Configuración y de dónde obtener la clave de Gemini.
 
@@ -25,9 +25,9 @@ En una copia nueva del repositorio, se necesitan Node.js 22.13 o posterior y FFm
 
 ## Estado real
 
-Comprobado: interfaz local, perfiles, guardado de solicitudes, límites y duplicados, seis pruebas automáticas, un MP4 técnico de ocho segundos y una ejecución manual del contrato del coordinador n8n.
+Comprobado: perfiles, claves persistentes, voces en español, presupuestos y consumo conciliado, generación de guiones, audio ElevenLabs y exportación MP4 local. Incluye logo opcional, referencias visuales, imágenes de producción, modos de texto creativo/literal y láminas estáticas. Se han exportado videos reales con voz y logo.
 
-Pendiente: configurar claves reales, voz del perfil y autenticación del webhook; probar una producción completa; personajes 2D avanzados; publicación Facebook/Instagram; alojamiento remoto y subdominio. El primer render usa una ilustración básica y un tono de prueba; no representa todavía el acabado audiovisual final.
+En movimiento se animan imágenes propias o se usan ilustraciones reutilizables de plantilla. No hay generación automática de fotografías por IA. Facebook/Instagram, personajes 2D avanzados y la conexión segura de una UI remota con el Mac siguen pendientes.
 
 La interfaz utiliza la dirección visual recuperada de Smart Growth Online / Synapse: fondo azul noche, paneles glass y acentos teal, azul eléctrico y violeta. Los valores de implementación y su origen están en [Diseño](docs/DISENO.md). El acabado se seguirá revisando con el propietario.
 
@@ -35,7 +35,7 @@ La interfaz utiliza la dirección visual recuperada de Smart Growth Online / Syn
 
 ## Despliegue posterior
 
-Subdominio propuesto: `studio.smartgowth.online`. Los DNS se administran en IONOS. Netlify es la opción propuesta para el panel; no se ha conectado ni desplegado una cuenta de alojamiento.
+Subdominio elegido: `creativestudio`. Los DNS se administran en IONOS. Vercel es la opción elegida para el panel. El repositorio ya se importó allí, pero el motor local no está adaptado para funcionar como servicio remoto; un despliegue exitoso no resuelve esa conexión. El subdominio elegido es `creativestudio` sobre el dominio registrado en IONOS.
 
 GitHub almacena y versiona el código. Netlify/Vercel alojarían el panel. El Mac y el disco seleccionado producen y conservan los medios. Subir el código no publica la aplicación ni convierte el motor local en un servidor remoto.
 

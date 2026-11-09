@@ -1,7 +1,7 @@
 import {setTimeout as sleep} from 'node:timers/promises';
 export async function requestGeneration(store,job,baseId,amount,request,{wait=sleep,onRetry=()=>{}}={}){
  for(let attempt=0;attempt<3;attempt++){
-  const charge=store.reserve(job.id,'text',amount,500000,store.generationCharge(baseId));
+  const charge=store.reserve(job.id,'text',amount,store.settings().monthlyTextTokens??500000,store.generationCharge(baseId));
   // Network failures/timeouts leave the reservation pending: their outcome is unknown.
   const response=await request();
   if(response.ok)return {response,charge};

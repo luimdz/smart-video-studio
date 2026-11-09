@@ -45,3 +45,9 @@ test('la voz del perfil y su nombre se conservan al reabrir la base local',t=>{
  const {s,dir}=fixture(t),p=s.list('profiles')[0];s.assignVoice(p.id,'voice-saved','Narradora latina');const reopened=createStore(dir);
  try{const saved=reopened.list('profiles').find(x=>x.id===p.id);assert.equal(saved.voiceId,'voice-saved');assert.equal(saved.voiceName,'Narradora latina');assert.equal(saved.niche,p.niche);}finally{reopened.db.close();}
 });
+test('las reservas se concilian con uso real, conservan su estimación y sobreviven al reinicio',t=>{
+ const {s,dir,input}=fixture(t),j=s.addJob(input);s.reserve(j.id,'text',490000,500000,'large-estimate');s.recordConsumption('large-estimate',j.id,{provider:'gemini',usage:{totalTokenCount:10000}});s.settle('large-estimate',10000);assert.equal(s.usage()[0].amount,10000);assert.equal(s.db.prepare('SELECT amount FROM charge_estimates WHERE id=?').get('large-estimate').amount,490000);s.reserve(j.id,'text',30000,500000,'next-stage');const reopened=createStore(dir);try{assert.equal(reopened.usage()[0].amount,40000);assert.equal(reopened.interruptedCharges(j.id).length,1);}finally{reopened.db.close();}
+});
+test('se reconcilian reservas históricas confirmadas sin liberar llamadas inciertas',t=>{
+ const {s,dir,input}=fixture(t),j=s.addJob(input);s.reserve(j.id,'text',400000,500000,'historical');s.recordConsumption('historical',j.id,{provider:'gemini',usage:{totalTokenCount:12000}});s.settle('historical');s.reserve(j.id,'text',10000,500000,'unknown');const reopened=createStore(dir);try{assert.equal(reopened.usage()[0].amount,22000);assert.deepEqual(reopened.interruptedCharges(j.id).map(r=>r.id),['unknown']);}finally{reopened.db.close();}
+});

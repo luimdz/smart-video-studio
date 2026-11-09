@@ -1,4 +1,5 @@
 import http from 'node:http';
+import {usesExactText} from './content.mjs';
 import {listVoices,resolveLibraryVoice} from './voices.mjs';
 import { revision } from './revision.mjs';
 const runningRevision=await revision();
@@ -31,7 +32,7 @@ async function coordinate(j){
   const raw=await r.json(),result=Array.isArray(raw)?raw[0]:raw;
   if(result.productionId!==j.id||result.protocolVersion!==1||result.action!==nextAction(j))throw new Error('n8n devolvió una instrucción fuera del contrato esperado.');return result.action;
 }
-async function preflight(j){const c=store.settings(),s=store.secrets(),p=store.list('profiles').find(p=>p.id===j.profileId);await requireStorage(c.storageRoot);for(const image of [...(j.referenceImages||[]),...(j.useLogo&&j.logo?[j.logo]:[])]){try{await access(image.file);}catch{throw new Error('No se encuentra una imagen adjunta. Conecta el disco donde la guardaste antes de producir.');}}if(j.style==='static'&&j.staticText?.trim())letterOverlay(j.staticText);if(!s.geminiKey||!s.elevenKey)throw new Error('Configura las claves de Gemini y ElevenLabs.');if(!p?.voiceId)throw new Error('Selecciona una voz para este perfil.');if(!c.n8nUrl||!s.n8nToken)throw new Error('Configura el workflow coordinador de n8n.');if(store.interruptedCharges(j.id).length)throw new Error('Hay una llamada de resultado incierto. Revisa el proveedor antes de repetir; la aplicación no volverá a cobrarla automáticamente.');}
+async function preflight(j){const c=store.settings(),s=store.secrets(),p=store.list('profiles').find(p=>p.id===j.profileId);await requireStorage(c.storageRoot);for(const image of [...(j.referenceImages||[]),...(j.productionImages||[]),...(j.useLogo&&j.logo?[j.logo]:[])]){try{await access(image.file);}catch{throw new Error('No se encuentra una imagen adjunta. Conecta el disco donde la guardaste antes de producir.');}}if(j.style==='static'&&usesExactText(j))letterOverlay(j.staticText);if(!s.geminiKey||!s.elevenKey)throw new Error('Configura las claves de Gemini y ElevenLabs.');if(!p?.voiceId)throw new Error('Selecciona una voz para este perfil.');if(!c.n8nUrl||!s.n8nToken)throw new Error('Configura el workflow coordinador de n8n.');if(store.interruptedCharges(j.id).length)throw new Error('Hay una llamada de resultado incierto. Revisa el proveedor antes de repetir; la aplicación no volverá a cobrarla automáticamente.');}
 async function run(id){let j=store.getJob(id);active.add(id);pauses.delete(id);try{
   j.status='running';j.root=j.root||await requireStorage(store.settings().storageRoot);record(j,'Producción iniciada. Las voces se generan después de revisar todos los guiones.');
   while(true){if(pauses.has(id)){j.status='paused';record(j,'Pausada después de guardar la etapa actual.');break;}
@@ -65,9 +66,9 @@ const server=http.createServer(async(req,res)=>{try{
   if(req.method==='POST'){
     const data=await body(req);
     if(url.pathname==='/api/profiles')store.addProfile(data);
-    else if(url.pathname==='/api/jobs'){if(data.style==='static'&&typeof data.staticText==='string'&&data.staticText.trim())letterOverlay(data.staticText);store.addJob(data);}
+    else if(url.pathname==='/api/jobs'){if(data.style==='static'&&usesExactText(data))letterOverlay(data.staticText);store.addJob(data);}
     else if(url.pathname==='/api/settings'){
-      const config=z.object({storageRoot:z.string().min(1).max(1000),voiceModel:z.enum(['eleven_flash_v2_5','eleven_multilingual_v2']),monthlyCredits:z.number().int().min(100).max(30000),n8nUrl:z.union([z.literal(''),z.string().url()]),useN8n:z.boolean().default(true)}).parse(data);
+      const config=z.object({storageRoot:z.string().min(1).max(1000),voiceModel:z.enum(['eleven_flash_v2_5','eleven_multilingual_v2']),monthlyCredits:z.number().int().min(100).max(30000),monthlyTextTokens:z.number().int().min(1000).max(100000000).default(500000),n8nUrl:z.union([z.literal(''),z.string().url()]),useN8n:z.boolean().default(true)}).parse(data);
       if(active.size)throw new Error('Espera a que termine el trabajo antes de cambiar la configuración.');
       if(config.n8nUrl){const u=new URL(config.n8nUrl);if(u.protocol!=='https:'||u.hostname!=='n8n.planifyx.com')throw new Error('Usa la URL HTTPS de tu instancia n8n.planifyx.com.');}
       const selected=path.resolve(config.storageRoot);if(selected===path.parse(selected).root)throw new Error('Selecciona una carpeta de biblioteca, no la raíz del disco.');await access(path.dirname(selected));await mkdir(selected,{recursive:true});config.storageRoot=await requireStorage(selected);store.saveSettings(config,data.secrets||{});
@@ -99,7 +100,7 @@ const server=http.createServer(async(req,res)=>{try{
       store.assignVoice(p.id,voiceId,voiceName);
     }
     else if(url.pathname==='/api/media'){
-      const kind=z.enum(['logo','reference']).parse(data.kind),image=z.string().max(24000000).parse(data.image),match=/^data:image\/(png|jpeg|webp);base64,([A-Za-z0-9+/=\r\n]+)$/.exec(image);
+      const kind=z.enum(['logo','reference','production']).parse(data.kind),image=z.string().max(24000000).parse(data.image),match=/^data:image\/(png|jpeg|webp);base64,([A-Za-z0-9+/=\r\n]+)$/.exec(image);
       if(!match)throw new Error('Adjunta una imagen PNG, JPG o WebP.');
       const buffer=Buffer.from(match[2],'base64'),decoder=sharp(buffer,{limitInputPixels:40000000}),meta=await decoder.metadata();
       if(!['png','jpeg','webp'].includes(meta.format)||(kind==='logo'&&meta.format!=='png'))throw new Error('El logo debe ser un PNG válido. Para referencias usa PNG, JPG o WebP.');

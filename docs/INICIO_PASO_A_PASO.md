@@ -112,7 +112,7 @@ Esta acción sí utiliza las APIs configuradas. La producción pagada completa t
 
 El diseño visual está en revisión según las preferencias de Smart Growth Online. El objetivo es una interfaz premium con paneles glass y acentos neón; las acciones y estados deben seguir siendo fáciles de leer.
 
-Guardar en GitHub es el paso actual. Después de revisar la UI y validar el primer video, conectaremos el alojamiento elegido y el subdominio propuesto `studio.smartgowth.online`. No hace falta cambiar de proveedor DNS: los registros siguen en IONOS.
+Guardar en GitHub es el paso actual. Después de revisar la UI y validar el primer video, conectaremos el alojamiento elegido y el subdominio elegido `creativestudio`. No hace falta cambiar de proveedor DNS: los registros siguen en IONOS.
 
 Antes del despliegue remoto hay que resolver login y conexión del panel con el motor del Mac. Una subida estática a Netlify o Vercel por sí sola no resuelve esa comunicación.
 
@@ -157,9 +157,9 @@ Los perfiles se muestran en tarjetas compactas de igual altura, con la voz y su 
 
 En **Crear contenido**, activa **Incluir logo de marca en este video** y adjunta un PNG. El logo se ajusta proporcionalmente dentro de 180 × 140 píxeles en una composición de 1080 × 1920, con un margen de 40 píxeles arriba y a la derecha. Permanece fijo incluso sobre imágenes con movimiento. Si no activas la opción, no se incrusta. En una serie se aplica a todos sus capítulos.
 
-Puedes adjuntar hasta veinte **Imágenes de referencia**, PNG/JPG/WebP, de hasta 16 MB por archivo. Se almacenan localmente. Al producir se envían versiones reducidas a Gemini para orientar guiones y composición; ese análisis consume tokens. No se ha integrado un generador de imágenes: las referencias orientan el contenido y no garantizan una reproducción de su diseño. Solo se usa la primera como fondo si activas esa opción; en otro caso permanecen como referencias de planificación.
+Puedes adjuntar hasta veinte **Imágenes de referencia**, PNG/JPG/WebP, de hasta 16 MB por archivo. Se almacenan localmente. Al producir se envían versiones reducidas a Gemini para orientar guiones y composición; ese análisis consume tokens. No se ha integrado un generador de imágenes: las referencias orientan el contenido y no garantizan una reproducción de su diseño. Las referencias quedan reservadas a la planificación. Adjunta por separado las imágenes que quieras mostrar en el video.
 
-Para cartas y poesía, selecciona **Lámina estática · carta o poesía**. Puedes pegar tu texto original, que se mostrará y narrará; o dejarlo vacío para crear un texto original a partir del tema. El formato mantiene una lámina fija con texto legible, sin los subtítulos móviles del resto de formatos. Conserva párrafos y adapta el tamaño del texto; si no cabe con un tamaño legible, solicita dividirlo en varios videos en lugar de omitir palabras. En series, deja el texto vacío para obtener un texto propio por capítulo. La duración final depende del audio generado.
+Para cartas y poesía, selecciona **Lámina estática · carta o poesía**. El modo inicial crea contenido original a partir de tu idea e indicaciones adicionales. Solo si seleccionas **Usar mi texto literalmente**, ese campo se muestra y narra tal cual. El formato mantiene una lámina fija con texto legible, sin los subtítulos móviles del resto de formatos. Conserva párrafos y adapta el tamaño del texto; si no cabe con un tamaño legible, solicita dividirlo en varios videos en lugar de omitir palabras. En series, deja el texto vacío para obtener un texto propio por capítulo. La duración final depende del audio generado.
 
 ## 13. Confirmar que la voz quedó guardada
 
@@ -189,6 +189,18 @@ Los rechazos de Gemini incluyen ahora un registro técnico local en `generation_
 
 ## 17. Revisión de cartas originales y continuidad
 
-Una lámina individual con texto original conserva ese texto para la imagen y la narración. La validación comprueba estructura y referencias del guion; no lo reescribe para convertirlo en una serie ni impone protagonistas a elementos decorativos de marca. En esta modalidad no se consumen llamadas adicionales de Gemini para revisar continuidad entre capítulos.
+Una lámina individual valida estructura, referencias, legibilidad y ausencia de instrucciones de creación en la narración final. En modo literal conserva tu texto; en modo creativo usa el guion generado. No se aplica continuidad de temporada a una carta individual ni se consumen llamadas adicionales para esa revisión.
 
 Para contenido generado y series, el revisor distingue contradicciones de preferencias estéticas. Hay hasta dos rondas de corrección y una tercera revisión final, para verificar la última corrección antes de generar la voz. Si quedan problemas tras esa verificación, se muestran las observaciones y se detiene la producción, sin aprobarla automáticamente por haber llegado al límite.
+
+## 18. Contenido original y control de consumo
+
+En **Crear contenido**, el modo inicial es **Crear contenido original a partir de mi idea**. Escribe tus objetivos en la idea y en las indicaciones creativas; Gemini los transforma en guion final. **Usar mi texto literalmente** es una selección explícita para textos terminados; no es el modo apropiado para un briefing.
+
+**Imágenes de referencia** orienta el estilo y se envía a Gemini al producir. **Imágenes que sí aparecerán en el video** contiene los recursos propios que se animarán o mostrarán. El uso de imágenes guardadas en el perfil es opcional. En movimiento se alternan las imágenes durante la narración. Si no hay imágenes propias, se usan ilustraciones de plantilla; todavía no existe generación automática de fotografías por IA.
+
+Las láminas nuevas usan un diseño claro de carta con tipografía serif. Las referencias no se usan como fondo automáticamente. Los videos anteriores se conservan.
+
+Al completar una llamada de Gemini se concilia la reserva con `usageMetadata.totalTokenCount`; para ElevenLabs se usa el cargo reportado cuando está disponible. El importe reservado originalmente queda en `charge_estimates` para auditoría. Los registros históricos confirmados también se concilian; las llamadas inciertas conservan su reserva. Esto corrige el límite local sin modificar cuotas ni facturas de los proveedores.
+
+En **Configuración** puedes ajustar **Límite mensual local de Gemini (tokens)**. El valor inicial sigue en 500.000; el mensaje de límite distingue presupuesto local, presupuesto por producción y una llamada ya registrada. No se eleva el presupuesto automáticamente.

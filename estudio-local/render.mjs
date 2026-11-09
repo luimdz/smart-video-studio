@@ -1,3 +1,4 @@
+import {narrationText} from './content.mjs';
 import { spawn } from 'node:child_process';
 import { mkdir, writeFile, readFile, statfs, realpath, access, rename, rm } from 'node:fs/promises';
 import path from 'node:path';
@@ -14,20 +15,27 @@ export async function renderEpisode(j,profile,number,library,{width=1080,height=
   await requireStorage(library);const audio=j.audio[number];if(!audio)throw new Error('Falta la voz de este capítulo.');
   if(audio.duration>300)throw new Error('La voz supera el máximo de 300 segundos. Ajusta el guion antes de exportar.');
   const dir=path.join(library,'productions',j.id,`episode-${String(number).padStart(2,'0')}`);await mkdir(dir,{recursive:true});const temp=path.join(dir,'work');await mkdir(temp,{recursive:true});
-  const backgrounds=profile.assets||[];let base;
-  const reference=j.useReferenceBackground?j.referenceImages?.[0]?.file:null;
+  const backgrounds=j.useProfileImages?(profile.assets||[]):[];let base;
+  const reference=j.productionImages?.[0]?.file||(j.useReferenceBackground?j.referenceImages?.[0]?.file:null);
   if(reference||((j.style==='motion'||j.style==='static')&&backgrounds.length)){
     let input=reference;
     if(!input){const source=await requireStorage(profile.assetsRoot||library);input=path.resolve(source,'assets',backgrounds[(number-1)%backgrounds.length]);if(!input.startsWith(path.join(source,'assets')+path.sep))throw new Error('Recurso visual inválido.');}
     base=await sharp(await readFile(input),{limitInputPixels:40000000}).resize(1080,1920,{fit:j.style==='static'?'contain':'cover',background:'#101827'}).png().toBuffer();
-  }else if(j.style==='static')base=await sharp({create:{width:1080,height:1920,channels:4,background:'#101827'}}).png().toBuffer();
+  }else if(j.style==='static')base=await sharp(Buffer.from(letterPaper())).png().toBuffer();
   else base=await sharp(Buffer.from(backdrop(j,profile,number))).png().toBuffer();
-  if(j.style==='static')base=await sharp(base).composite([{input:Buffer.from(letterOverlay(j.staticText?.trim()?j.staticText:audio.text,profile.name))}]).png().toBuffer();
+  if(j.style==='static')base=await sharp(base).composite([{input:Buffer.from(letterOverlay(narrationText(j,j.scripts[number-1]),profile.name))}]).png().toBuffer();
   const logo=j.useLogo&&j.logo?await sharp(await readFile(j.logo.file),{limitInputPixels:40000000}).resize(180,140,{fit:'inside'}).png().toBuffer():null;
   const logoMeta=logo?await sharp(logo).metadata():null;
-  const baseFile=path.join(temp,'background.png');await writeFile(baseFile,base);const segments=j.style==='static'?[{text:'',start:0,end:audio.duration}]:captions(audio),parts=[];
+  let baseFile=path.join(temp,'background.png');await writeFile(baseFile,base);const imageFiles=(j.productionImages||[]).map(x=>x.file);if(!imageFiles.length&&j.useReferenceBackground&&j.referenceImages?.length)imageFiles.push(...j.referenceImages.map(x=>x.file));if(j.useProfileImages)for(const file of backgrounds){const source=await requireStorage(profile.assetsRoot||library),input=path.resolve(source,'assets',file);if(!input.startsWith(path.join(source,'assets')+path.sep))throw new Error('Recurso visual inválido.');if(!imageFiles.includes(input))imageFiles.push(input);}
+  const segments=j.style==='static'?[{text:'',start:0,end:audio.duration}]:motionSegments(audio,imageFiles.length),parts=[],backgroundCache=new Map();
   for(let i=0;i<segments.length;i++){
-    const segment=segments[i],lines=words(segment.text,31).slice(0,4),boxHeight=lines.length*64+80;
+    const segment=segments[i];
+    if(j.style==='motion'){
+      const scenes=j.scripts[number-1]?.scenes||[],index=Math.min(Math.max(0,(imageFiles.length||scenes.length)-1),Math.floor(segment.start/audio.duration*(imageFiles.length||scenes.length||1))),key=String(index);
+      if(!backgroundCache.has(key)){const buffer=imageFiles.length?await sharp(await readFile(imageFiles[index]),{limitInputPixels:40000000}).rotate().resize(1080,1920,{fit:'cover'}).png().toBuffer():await sharp(Buffer.from(motionSceneSvg(j,profile,number,index))).png().toBuffer();const file=path.join(temp,`scene-${key}.png`);await writeFile(file,buffer);backgroundCache.set(key,file);}
+      baseFile=backgroundCache.get(key);
+    }
+    const lines=words(segment.text,31).slice(0,4),boxHeight=lines.length*64+80;
     const overlay=j.style==='static'?'<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1920"></svg>':`<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1920"><rect x="56" y="${1690-boxHeight}" width="968" height="${boxHeight}" rx="30" fill="#07130e" fill-opacity=".9"/>${lines.map((text,k)=>`<text x="540" y="${1755-boxHeight+k*64}" text-anchor="middle" font-family="Arial" font-size="48" font-weight="bold" fill="#fff">${escapeXml(text)}</text>`).join('')}<rect x="56" y="1740" width="${Math.round(968*(i+1)/segments.length)}" height="6" rx="3" fill="${profile.color}"/></svg>`;
     const overlayFile=path.join(temp,`caption-${i}.png`);let frame=sharp(Buffer.from(overlay));if(logo)frame=frame.composite([{input:logo,left:1080-40-logoMeta.width,top:40}]);await frame.png().toFile(overlayFile);const part=path.join(temp,`part-${i}.mp4`);parts.push(part);
     await processFile('ffmpeg',['-hide_banner','-loglevel','error','-y','-loop','1','-framerate','30','-i',baseFile,'-loop','1','-framerate','30','-i',overlayFile,'-filter_complex',j.style==='static'?`[0:v][1:v]overlay=0:0,scale=${width}:${height},format=yuv420p[out]`:`[0:v]scale=1120:1992,crop=1080:1920:x='20+15*sin(t/4)':y='36+20*cos(t/4)'[bg];[bg][1:v]overlay=0:0,scale=${width}:${height},format=yuv420p[out]`,'-map','[out]','-t',String(segment.end-segment.start),'-an','-r','30','-c:v','libx264','-preset','ultrafast','-crf','22','-threads','2',part],dir);
@@ -45,5 +53,17 @@ export function letterOverlay(text,name=''){
  const paragraphs=String(text).split('\n');let lines=[],size=46;
  for(;size>=18;size-=2){const width=Math.floor(840/(size*.65));lines=paragraphs.flatMap(p=>p.trim()?words(p.replace(new RegExp(`(\\S{${width}})(?=\\S)`,'gu'),'$1 '),width):['']);if(lines.length*size*1.45<=1260)break;}
  if(size<18)throw new Error('El texto es demasiado extenso para una lámina legible. Divídelo en varios videos o reduce el texto.');
- return `<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1920"><rect x="70" y="300" width="940" height="1380" rx="30" fill="#0b1220" fill-opacity=".92"/><text x="80" y="110" font-family="Arial" font-size="28" fill="#fff">${escapeXml(String(name).slice(0,80))}</text>${lines.map((line,i)=>`<text x="120" y="${360+size+i*size*1.45}" font-family="Arial" font-size="${size}" fill="#fff">${escapeXml(line)}</text>`).join('')}</svg>`;
+ return `<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1920"><rect x="70" y="300" width="940" height="1380" rx="30" fill="#fffaf0" fill-opacity=".96"/><text x="80" y="110" font-family="Georgia" font-size="28" fill="#614b48">${escapeXml(String(name).slice(0,80))}</text>${lines.map((line,i)=>`<text x="120" y="${360+size+i*size*1.45}" font-family="Georgia" font-size="${size}" fill="#392f31">${escapeXml(line)}</text>`).join('')}</svg>`;
+}
+
+export function letterPaper(){return `<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1920"><defs><linearGradient id="paper" x2="1" y2="1"><stop stop-color="#f5e8d5"/><stop offset="1" stop-color="#e9d4ca"/></linearGradient><radialGradient id="glow"><stop stop-color="#fffdf5" stop-opacity=".95"/><stop offset="1" stop-color="#f6e0c9" stop-opacity="0"/></radialGradient></defs><rect width="1080" height="1920" fill="url(#paper)"/><ellipse cx="280" cy="200" rx="650" ry="900" fill="url(#glow)"/><rect x="42" y="220" width="996" height="1530" rx="12" fill="none" stroke="#b58a77" stroke-opacity=".5"/><path d="M90 185Q180 100 220 185T350 185M730 1800Q810 1860 900 1800" fill="none" stroke="#b58a77" stroke-width="3"/><path d="M485 220Q450 190 470 175Q490 160 510 185Q530 160 550 175Q570 190 535 220L510 242Z" fill="#ae776c" opacity=".65"/></svg>`;}
+
+export function motionSegments(audio,imageCount){
+ const segments=captions(audio);if(imageCount<2)return segments;
+ return segments.flatMap(s=>{const cuts=[s.start,...Array.from({length:imageCount-1},(_,i)=>(i+1)*audio.duration/imageCount).filter(t=>t>s.start&&t<s.end),s.end];return cuts.slice(0,-1).map((start,i)=>({...s,start,end:cuts[i+1]}));});
+}
+export function motionSceneSvg(j,profile,number,index){
+ const forensic=/fotograf|criminal|forense|escenario/i.test(j.topic+' '+j.title),hue=190+(index*29)%110;
+ const illustration=forensic?`<rect x="160" y="670" width="760" height="480" rx="70" fill="#132e45" stroke="#8ee8ed" stroke-width="7"/><path d="M300 670L350 575H600L650 670" fill="#284e65" stroke="#8ee8ed" stroke-width="7"/><circle cx="540" cy="910" r="180" fill="#071b30" stroke="#b2f1ef" stroke-width="14"/><circle cx="540" cy="910" r="115" fill="hsl(${hue},65%,30%)" stroke="#4acddd" stroke-width="6"/><circle cx="505" cy="870" r="45" fill="#caf6ff" opacity=".5"/><rect x="730" y="730" width="100" height="45" rx="12" fill="#ffe4a4"/><path d="M100 1200L200 1035L300 1200Z" fill="#f2cf79"/><text x="200" y="1160" text-anchor="middle" font-family="Arial" font-size="65" fill="#20313f">${index+1}</text><path d="M100 400H260M100 400V550M820 400H980V550M100 1250V1400H260M820 1400H980V1250" fill="none" stroke="#90c8d7" stroke-width="7"/>`:`<circle cx="540" cy="890" r="280" fill="hsl(${hue},50%,27%)"/><path d="M270 940L440 720L620 850L810 610" fill="none" stroke="#b0f1ed" stroke-width="25" stroke-linecap="round"/><circle cx="270" cy="940" r="34" fill="#ffe4a4"/><circle cx="440" cy="720" r="34" fill="#ffe4a4"/><circle cx="620" cy="850" r="34" fill="#ffe4a4"/><circle cx="810" cy="610" r="34" fill="#ffe4a4"/>`;
+ return `<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1920"><defs><linearGradient id="bg" x2="1" y2="1"><stop stop-color="#102335"/><stop offset="1" stop-color="hsl(${hue},40%,14%)"/></linearGradient><pattern id="grid" width="70" height="70" patternUnits="userSpaceOnUse"><path d="M70 0H0V70" fill="none" stroke="#b5e6ef" stroke-opacity=".08"/></pattern></defs><rect width="1080" height="1920" fill="url(#bg)"/><rect width="1080" height="1920" fill="url(#grid)"/><text x="76" y="110" font-family="Arial" font-size="26" fill="#b2d3df">${escapeXml(profile.name.slice(0,40))}</text><text x="76" y="240" font-family="Arial" font-size="42" font-weight="bold" fill="#e2f6f6">${forensic?'REGISTRO VISUAL':'IDEAS EN MOVIMIENTO'}</text><text x="76" y="320" font-family="Arial" font-size="25" fill="#81c3cf">${String(index+1).padStart(2,'0')} / ${String(j.scripts[number-1]?.scenes.length||1).padStart(2,'0')}</text>${illustration}</svg>`;
 }
