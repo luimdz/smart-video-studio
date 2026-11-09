@@ -8,7 +8,7 @@ La UI crea perfiles, videos, temporadas de 10–25 capítulos y VSL de 120–300
 
 El coordinador de esta instalación está configurado y publicado: [workflow](https://n8n.planifyx.com/workflow/W0Yov0Nebhvtaa1M). En instalaciones nuevas, guardar las claves y el webhook en **Configuración** y configurar Header Auth `X-Studio-Token` con el token del estudio. n8n recibe estados y contadores, no las claves de Gemini/ElevenLabs ni los medios.
 
-Una producción simultánea. Las pausas se aplican al terminar una etapa. Una llamada de resultado incierto bloquea el reenvío; respuestas 503 explícitas admiten reintentos acotados y liberan su propia reserva. Los límites locales no equivalen al saldo del proveedor.
+Una producción simultánea con cola: al pulsar Producir mientras hay otro trabajo, el nuevo queda en espera; un fallo no detiene los siguientes. Los trabajos en espera o detenidos se pausan de inmediato. En un trabajo activo la pausa se aplica al terminar la etapa actual. Una llamada de resultado incierto bloquea el reenvío; respuestas 503 explícitas admiten reintentos acotados y liberan su propia reserva. Los límites locales no equivalen al saldo del proveedor.
 
 ## Estilos visuales
 
@@ -32,3 +32,9 @@ No se incluye una canción de muestra ni se sustituye la música por un tono sin
 Probados perfiles extensos, persistencia de claves y voces, adjuntos eliminables, presupuestos, respuestas Gemini, exportaciones reales de video, música y modo sin narración. `npm test` ejecuta las pruebas automatizadas. La prueba técnica opcional está identificada como tal; su tono nunca se usa como audio de una producción real.
 
 Quedan pendientes publicación Facebook/Instagram, imagen generativa por API, reparto de personajes articulados, ampliar piezas CODE ART por temática y autenticar/conectar una UI remota al Mac. Las temporadas completas y VSL de 300 segundos necesitan pruebas reales de calidad y rendimiento; no se afirma haberlas validado a escala. Vercel puede alojar el panel cuando exista ese puente seguro; el servidor actual no debe exponerse directamente a internet.
+
+## Recuperar una revisión detenida
+
+El detalle muestra las observaciones y ofrece **Corregir observaciones y continuar**. Esa acción abre un ciclo acotado nuevo, conserva ficha, arco y guiones y utiliza una caché distinta para las correcciones y revisiones. No repite indefinidamente la revisión ya agotada ni omite las observaciones. También se puede **Revisar y editar guion** antes de generar voces: guardar no consume APIs y requiere otra revisión al continuar. No se modifica un guion que ya tiene voz o video; para eso hace falta otra versión.
+
+La UI actualiza el estado del diálogo y sus controles durante la producción. Un reinicio del servicio conserva la cola como trabajos pausados para evitar llamadas imprevistas; se reanudan desde sus avances con Producir. La sesión del navegador se renueva cuando cambia el motor local.

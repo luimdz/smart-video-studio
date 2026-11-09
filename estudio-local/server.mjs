@@ -1,3 +1,5 @@
+import {createProductionQueue} from './production-queue.mjs';
+import {needsReviewRecovery,reopenReview,editScriptText} from './recovery.mjs';
 import {romanticNote} from './static-design.mjs';
 import {ensureCodeArt} from './code-art-resources.mjs';
 import http from 'node:http';
@@ -20,12 +22,13 @@ const stateDir=process.env.STUDIO_STATE_DIR||path.join(here,'.state');
 const store=createStore(stateDir);store.resetDrafts();
 const port=Number(process.env.STUDIO_PORT||4317),origin=`http://127.0.0.1:${port}`,session=randomBytes(32).toString('hex');
 const active=new Set(),pauses=new Set();let admitting=false;
+const queue=createProductionQueue({run,onError:(id,error)=>{const j=store.getJob(id);j.status='failed';j.error=error.message;record(j,j.error);}});
 const defaults=store.settings();if(!defaults.storageRoot){const root=path.join(here,'outputs');await mkdir(root,{recursive:true});store.saveSettings({storageRoot:root,useN8n:true});}
 const json=(res,status,data)=>{res.writeHead(status,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'});res.end(JSON.stringify(data));};
 async function body(req){let size=0,parts=[];for await(const chunk of req){size+=chunk.length;if(size>25*1024*1024)throw new Error('El archivo supera el límite de 25 MB.');parts.push(chunk);}return JSON.parse(Buffer.concat(parts).toString()||'{}');}
 function record(j,message){j.events.unshift({at:new Date().toISOString(),message});j.events=j.events.slice(0,100);store.saveJob(j);}
-function view(j){return {id:j.id,title:j.title,type:j.type,style:j.style,episodes:j.episodes,duration:j.duration,status:j.status,progress:j.progress,error:j.error,profileId:j.profileId,createdAt:j.createdAt,updatedAt:j.updatedAt,maxCredits:j.maxCredits,stage:j.stage||'',demo:!!j.demo,scriptCount:j.scripts.length,audioCount:Object.keys(j.audio).length,videos:Object.fromEntries(Object.entries(j.videos).map(([n,v])=>[n,{duration:v.duration,bytes:v.bytes,width:v.width,height:v.height}]))};}
-async function state(){const c=store.settings(),s=store.secrets();return {profiles:store.list('profiles'),music:store.listMusic(),jobs:store.list('jobs').sort((a,b)=>b.createdAt.localeCompare(a.createdAt)).map(view),settings:c,connections:{gemini:!!s.geminiKey,elevenlabs:!!s.elevenKey,n8nToken:!!s.n8nToken,n8n:!!(s.n8nToken&&c.n8nUrl)},usage:store.usage(),accounting:store.accounting(),storage:await storageStatus(c.storageRoot),active:active.size};}
+function view(j){return {id:j.id,title:j.title,type:j.type,style:j.style,episodes:j.episodes,duration:j.duration,status:j.status,progress:j.progress,error:j.error,profileId:j.profileId,createdAt:j.createdAt,updatedAt:j.updatedAt,maxCredits:j.maxCredits,stage:j.stage||'',pauseRequested:pauses.has(j.id),demo:!!j.demo,scriptCount:j.scripts.length,audioCount:Object.keys(j.audio).length,videos:Object.fromEntries(Object.entries(j.videos).map(([n,v])=>[n,{duration:v.duration,bytes:v.bytes,width:v.width,height:v.height}]))};}
+async function state(){const c=store.settings(),s=store.secrets();return {profiles:store.list('profiles'),music:store.listMusic(),jobs:store.list('jobs').sort((a,b)=>b.createdAt.localeCompare(a.createdAt)).map(view),settings:c,connections:{gemini:!!s.geminiKey,elevenlabs:!!s.elevenKey,n8nToken:!!s.n8nToken,n8n:!!(s.n8nToken&&c.n8nUrl)},usage:store.usage(),accounting:store.accounting(),storage:await storageStatus(c.storageRoot),active:active.size,queued:queue.pending};}
 async function coordinate(j){
   const c=store.settings(),s=store.secrets();if(!c.useN8n)throw new Error('Conecta n8n para coordinar la producción.');
   const u=new URL(c.n8nUrl);if(u.protocol!=='https:'||u.hostname!=='n8n.planifyx.com')throw new Error('La dirección debe pertenecer a tu instancia n8n.planifyx.com y usar HTTPS.');
@@ -46,7 +49,7 @@ async function run(id){let j=store.getJob(id);active.add(id);pauses.delete(id);t
     j.progress=Math.round((Number(!!j.bible)+Number(!!j.outline)+j.scripts.length+Number(j.reviewPassed)+Object.keys(j.audio).length+Object.keys(j.videos).length)/(3+3*j.episodes)*100);record(j,`Etapa guardada: ${action}.`);
     await writeFile(path.join(j.root,'productions',j.id+'.json'),JSON.stringify(j,null,2)).catch(async e=>{if(e.code!=='ENOENT')throw e;await mkdir(path.join(j.root,'productions'),{recursive:true});await writeFile(path.join(j.root,'productions',j.id+'.json'),JSON.stringify(j,null,2));});
   }
- }catch(error){j.status='failed';j.error=error.issues?.[0]?.message||error.message;record(j,'La producción se detuvo: '+j.error);}finally{active.delete(id);store.saveJob(j);}}
+ }catch(error){j.status='failed';j.error=error.issues?.[0]?.message||error.message;record(j,'La producción se detuvo: '+j.error);}finally{active.delete(id);pauses.delete(id);store.saveJob(j);}}
 async function demo(){if(active.size)throw new Error('Espera a que termine la exportación actual.');let profile=store.list('profiles')[0];if(!profile)profile=store.addProfile({name:'Prueba local',niche:'Demostración del estudio',audience:'Propietario',brief:'Perfil de prueba creado al solicitar el render de demostración.'});
   const j=store.addJob({profileId:profile.id,title:'Tu estudio, en movimiento',topic:'Prueba local de exportación, sin IA ni voz de proveedor.',type:'video',style:'motion',episodes:1,duration:30,maxCredits:100,requestKey:randomUUID()});j.demo=true;j.status='running';j.root=await requireStorage(store.settings().storageRoot);j.scripts=[{number:1,title:j.title,coverTitle:'Tu estudio, en movimiento',scenes:[],facebookCopy:'Demostración técnica. Sin voz de ElevenLabs.',instagramCopy:'Demostración técnica. Sin voz de ElevenLabs.'}];j.bible={characters:[{id:'demo-presenter'}]};active.add(j.id);store.saveJob(j);
   void(async()=>{try{const dir=path.join(j.root,'productions',j.id);await mkdir(dir,{recursive:true});const file=path.join(dir,'test-tone.wav');await processFile('ffmpeg',['-hide_banner','-loglevel','error','-y','-f','lavfi','-i','sine=frequency=440:duration=8','-af','volume=0.025',file],dir);j.audio[1]={file,duration:8,text:'Prueba de render local. Este video no utiliza voces ni créditos de ElevenLabs.'};j.videos[1]=await renderEpisode(j,profile,1,j.root,{width:720,height:1280});j.status='ready';j.progress=100;record(j,'MP4 de prueba de 8 segundos generado y verificado. Audio: tono de prueba. No hubo llamadas a IA.');}catch(e){j.status='failed';j.error=e.message;record(j,j.error);}finally{active.delete(j.id);store.saveJob(j);}})();return j;
@@ -63,7 +66,7 @@ const server=http.createServer(async(req,res)=>{try{
   if(req.method==='POST'&&url.pathname==='/api/restart'){if(active.size||admitting)throw new Error('Hay una producción en curso. Termínala o páusala antes de actualizar.');json(res,200,{restarting:true});server.close(()=>process.exit(0));return;}
   if(req.method==='GET'&&url.pathname==='/api/state'){json(res,200,await state());return;}
   if(req.method==='GET'&&url.pathname==='/api/volumes'){let names=[];try{names=await readdir('/Volumes');}catch{}json(res,200,{volumes:await Promise.all(names.filter(n=>n!=='Recovery').map(n=>storageStatus(path.join('/Volumes',n))))});return;}
-  if(req.method==='GET'&&url.pathname.startsWith('/api/jobs/')){const id=url.pathname.split('/')[3],j=store.getJob(id);json(res,200,{...j,audio:Object.fromEntries(Object.entries(j.audio).map(([k,a])=>[k,{duration:a.duration,voiceId:a.voiceId,model:a.model}])),root:j.root});return;}
+  if(req.method==='GET'&&url.pathname.startsWith('/api/jobs/')){const id=url.pathname.split('/')[3],j=store.getJob(id);json(res,200,{...j,pauseRequested:pauses.has(j.id),audio:Object.fromEntries(Object.entries(j.audio).map(([k,a])=>[k,{duration:a.duration,voiceId:a.voiceId,model:a.model}])),root:j.root});return;}
   if(req.method==='GET'&&url.pathname.startsWith('/image/')){const [, ,id,n]=url.pathname.split('/'),v=store.getJob(id).videos[n];if(!v?.image)throw new Error('Imagen no encontrada.');await access(v.image);res.writeHead(200,{'Content-Type':'image/png','Cache-Control':'no-store'});createReadStream(v.image).pipe(res);return;}
   if(req.method==='GET'&&url.pathname.startsWith('/video/')){const [, ,id,n]=url.pathname.split('/'),j=store.getJob(id),v=j.videos[n];if(!v)throw new Error('Video no encontrado.');const info=await stat(v.file),range=req.headers.range;const headers={'Content-Type':'video/mp4','Accept-Ranges':'bytes','Cache-Control':'no-store'};if(range){const match=/^bytes=(\d+)-(\d*)$/.exec(range);if(!match){res.writeHead(416);res.end();return;}const start=Number(match[1]),end=Math.min(Number(match[2]||info.size-1),info.size-1);if(start>end){res.writeHead(416);res.end();return;}res.writeHead(206,{...headers,'Content-Length':end-start+1,'Content-Range':`bytes ${start}-${end}/${info.size}`});createReadStream(v.file,{start,end}).pipe(res);}else{res.writeHead(200,{...headers,'Content-Length':info.size});createReadStream(v.file).pipe(res);}return;}
   if(req.method==='POST'){
@@ -116,9 +119,24 @@ const server=http.createServer(async(req,res)=>{try{
       json(res,200,{id:store.addMedia({kind,file})});return;
     }
     else if(url.pathname==='/api/assets'){const p=store.list('profiles').find(p=>p.id===data.profileId);if(!p)throw new Error('Perfil no encontrado.');if((p.assets||[]).length>=30)throw new Error('Este perfil ya tiene 30 imágenes.');const image=z.string().max(24000000).parse(data.image),match=/^data:image\/(png|jpeg|webp);base64,([A-Za-z0-9+/=\r\n]+)$/.exec(image);if(!match)throw new Error('Usa una imagen PNG, JPG o WebP.');const root=await requireStorage(p.assetsRoot||store.settings().storageRoot),folder=path.join(root,'assets');await mkdir(folder,{recursive:true});const buffer=Buffer.from(match[2],'base64'),decoder=sharp(buffer,{limitInputPixels:40000000}),metadata=await decoder.metadata();if(!['png','jpeg','webp'].includes(metadata.format))throw new Error('El archivo no es una imagen PNG, JPG o WebP válida.');const name=randomUUID()+'.png';await decoder.resize({width:1920,height:1920,fit:'inside',withoutEnlargement:true}).png().toFile(path.join(folder,name));p.assets=[...(p.assets||[]),name];p.assetsRoot=root;store.db.prepare('UPDATE profiles SET data=? WHERE id=?').run(JSON.stringify(p),p.id);}
-    else if(url.pathname==='/api/run'){if(active.size||admitting)throw new Error('Hay una exportación activa. Esta versión procesa un trabajo a la vez.');admitting=true;try{const j=store.getJob(data.id);if(j.status==='ready')throw new Error('Este trabajo ya terminó.');await preflight(j);j.error=null;j.status='queued';store.saveJob(j);void run(j.id);}finally{admitting=false;}}
-    else if(url.pathname==='/api/pause'){pauses.add(data.id);}
-    else if(url.pathname==='/api/demo'){if(active.size||admitting)throw new Error('Hay una exportación activa.');admitting=true;try{await demo();}finally{admitting=false;}}
+    else if(url.pathname==='/api/run'){
+      if(admitting)throw new Error('Se está guardando otra solicitud. Intenta de nuevo en un momento.');admitting=true;
+      try{const j=store.getJob(data.id);if(j.status==='ready')throw new Error('Este trabajo ya terminó.');if(active.has(j.id)||queue.current===j.id||queue.pending.includes(j.id))throw new Error('Este trabajo ya está en producción o en cola.');await preflight(j);
+        if(needsReviewRecovery(j)){reopenReview(j);j.events.unshift({at:new Date().toISOString(),message:'Nueva ronda de recuperación iniciada con las observaciones pendientes. Se conservan ficha, plan y guiones.'});}
+        j.error=null;j.status='queued';pauses.delete(j.id);record(j,'Añadida a la cola de producción.');queue.enqueue(j.id);
+      }finally{admitting=false;}
+    }
+    else if(url.pathname==='/api/pause'){
+      const j=store.getJob(data.id);if(j.status==='ready')throw new Error('Este trabajo ya terminó.');
+      if(active.has(j.id)){pauses.add(j.id);record({...j},'Pausa solicitada; se aplicará al terminar la etapa en curso.');}
+      else{queue.remove(j.id);pauses.delete(j.id);j.status='paused';record(j,'Pausada. Los avances se conservan y no bloquea las demás producciones.');}
+    }
+    else if(url.pathname==='/api/job-script'){
+      const j=store.getJob(data.id);if(active.has(j.id)||queue.current===j.id||queue.pending.includes(j.id))throw new Error('Pausa este trabajo antes de editar el guion.');
+      const episodes=z.array(z.object({number:z.number().int().min(1),scenes:z.array(z.object({number:z.number().int().min(1),text:z.string().trim().min(1).max(30000)})).min(1).max(40)})).min(1).max(25).parse(data.episodes);
+      editScriptText(j,episodes);record(j,'Guion corregido y guardado. Al continuar se hará una revisión nueva antes de generar voz.');
+    }
+    else if(url.pathname==='/api/demo'){if(active.size||admitting||queue.pending.length||queue.current)throw new Error('Hay una exportación activa o en cola.');admitting=true;try{await demo();}finally{admitting=false;}}
     else throw new Error('Acción no encontrada.');
     json(res,200,await state());return;
   }

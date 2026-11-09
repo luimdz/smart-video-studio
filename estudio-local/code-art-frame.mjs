@@ -16,6 +16,15 @@ export async function createCodeArtFrames(input){
   const actionTime=words[o.actionWord].inicio;if(o.action==='reveal'&&t<actionTime)return;const u=k.suave(k.tramo(t,actionTime-.2,actionTime+.6)),position=[...o.position];if(o.action==='arrive')position[0]-=(1-u)*10;
   const P=k.proyecta(cam,position);if(!P)return;const radius=k.F*o.size/P.z,pulse=o.action==='pulse'?1+.07*k.pulso(t,actionTime+.18,.3):1;
   g.save();
+  if(o.kind==='floorplan'){
+   const d=o.size,x=position[0],y=position[1]-1,z=position[2];
+   const box=(dx,dy,dz,color)=>pieces.caja(g,cam,{x:dx.map(v=>x+v),y:dy.map(v=>y+v),z:dz.map(v=>z+v)},color,{bisel:1,brillo:.2,grano:.08});
+   box([-d,d],[-.15,0],[-d,d],[167,143,113]);box([-d-.12,-d],[-.1,1.8],[-d,d],[215,209,197]);box([-d,d],[0,1.8],[-d-.12,-d],[193,204,211]);box([-d+.4,-d+1.5],[0,.6],[-d+.4,-d+2],[66,87,112]);
+   const line=(points,color,width)=>{g.beginPath();points.forEach((point,i)=>{const p=k.proyecta(cam,[x+point[0],y+point[1],z+point[2]]);if(!p)return;if(i)g.lineTo(p.x,p.y);else g.moveTo(p.x,p.y);});g.strokeStyle=color;g.lineWidth=width;g.stroke();};
+   line([[-d+.2,.04,d-.3],[d-.2,.04,d-.3]],'#eaf7ff',5);line([[-d+.2,.04,d-.6],[-d+.2,.04,d],[d-.2,.04,d],[d-.2,.04,d-.6]],'#55dae8',3);
+   for(const [i,p]of [[-.7,.2],[1.3,-1.2]].entries()){const P=k.proyecta(cam,[x+p[0],y+.18,z+p[1]]);if(P){const r=48;g.beginPath();g.moveTo(P.x,P.y-r);g.lineTo(P.x+r*.7,P.y+r*.5);g.lineTo(P.x-r*.7,P.y+r*.5);g.closePath();g.fillStyle='#f5c35b';g.fill();g.strokeStyle='#fff0b4';g.lineWidth=3;g.stroke();g.fillStyle='#49351d';g.font='700 38px Figtree';g.textAlign='center';g.fillText(String(i+1),P.x,P.y+r*.25);}}
+   line([[0,.07,0],[d-.2,.07,d-.3]],'#ff796a',4);g.restore();return;
+  }
   if(o.kind==='box'){const d=o.size;pieces.caja(g,cam,{x:[position[0]-d,position[0]+d],y:[position[1]-d,position[1]+d],z:[position[2]-d,position[2]+d]},[parseInt(o.color.slice(1,3),16),parseInt(o.color.slice(3,5),16),parseInt(o.color.slice(5,7),16)],{bisel:1,brillo:.3,grano:.08});g.restore();return;}
   if(o.kind==='star'){k.estrella(g,['#ffffff',o.color,o.color,'#181e39','180,210,255'],P.x,P.y,radius,t*.08,o.action==='pulse'?k.pulso(t,actionTime+.2,.25):0);g.restore();return;}
   if(o.kind==='earth'){k.tierra(g,P.x,P.y,radius,t*.09);g.restore();return;}

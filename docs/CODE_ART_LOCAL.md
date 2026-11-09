@@ -16,7 +16,7 @@ La instalación busca la carpeta original en la ubicación anterior del Escritor
 
 ## Alcance y diferencias con el método original
 
-CODE ART es un método de producción de escenas específicas con herramientas de dibujo; no un generador universal al que se cambie un título. El catálogo automatizado inicial comprende cámara fotográfica, regla, marcador de evidencia, documento, caja, celular, vaso, estrella, planeta, Tierra y roca. Hay objetos nuevos dibujados con el kit y piezas originales importadas; no todas las escenas ni todas las piezas de los ejemplos están automatizadas.
+CODE ART es un método de producción de escenas específicas con herramientas de dibujo; no un generador universal al que se cambie un título. El catálogo automatizado inicial comprende cámara fotográfica, regla, marcador de evidencia, documento, plano de habitación con indicios y cotas, caja, celular, vaso, estrella, planeta, Tierra y roca. Hay objetos nuevos dibujados con el kit y piezas originales importadas; no todas las escenas ni todas las piezas de los ejemplos están automatizadas.
 
 Aún requiere ampliar ilustraciones, acciones e interacciones para otros temas, personajes y escenas complejas. Esta integración no garantiza automáticamente el nivel artístico de todos los ejemplos originales. Las comprobaciones técnicas y las portadas iniciales no sustituyen una dirección artística por escena ni una evaluación visual automática completa.
 
