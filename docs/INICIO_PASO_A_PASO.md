@@ -186,3 +186,9 @@ Referencia: [errores de Gemini](https://ai.google.dev/gemini-api/docs/generate-c
 El esquema enviado a Gemini conserva objetos, campos obligatorios y tipos, pero elimina límites numéricos y de tamaño de arrays del formato de generación para reducir su complejidad. Las validaciones completas se mantienen localmente al recibir la respuesta. Una lámina estática puede tener una sola escena.
 
 Los rechazos de Gemini incluyen ahora un registro técnico local en `generation_error_details`, asociado al intento rechazado, para diagnosticar su causa sin depender solo del código HTTP. No se sube a GitHub.
+
+## 17. Revisión de cartas originales y continuidad
+
+Una lámina individual con texto original conserva ese texto para la imagen y la narración. La validación comprueba estructura y referencias del guion; no lo reescribe para convertirlo en una serie ni impone protagonistas a elementos decorativos de marca. En esta modalidad no se consumen llamadas adicionales de Gemini para revisar continuidad entre capítulos.
+
+Para contenido generado y series, el revisor distingue contradicciones de preferencias estéticas. Hay hasta dos rondas de corrección y una tercera revisión final, para verificar la última corrección antes de generar la voz. Si quedan problemas tras esa verificación, se muestran las observaciones y se detiene la producción, sin aprobarla automáticamente por haber llegado al límite.

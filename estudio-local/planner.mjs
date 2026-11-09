@@ -49,9 +49,17 @@ export async function planningStep(store,j,action){
     references(s,j,n);if(correction){j.scripts[n-1]=s;j.corrections.shift();}else j.scripts.push(s);
   }
   if(action==='review'){
-    if(j.reviewPass>=2)throw new Error('La revisión de continuidad requiere atención antes de generar voces.');
-    const r=await generate(store,j,`Revisa la temporada completa. Esquema {issues:[{episode,problem,correction}],seasonSummary}. Revisa conocimientos, promesas y cierre. Ficha ${JSON.stringify(j.bible)}. Arco ${JSON.stringify(j.outline)}. Guiones ${JSON.stringify(j.scripts)}`,review,`review:${j.reviewPass}`);
+    if(j.type!=='series'&&j.style==='static'&&j.staticText?.trim()){
+      if(j.scripts.length!==1||!j.scripts[0].scenes.length)throw new Error('Falta el guion de la lámina estática.');
+      const script=j.scripts[0],scene=script.scenes[0];
+      script.scenes=[{...scene,number:1,narration:j.staticText,dialogue:[]}];references(script,j,1);
+      j.corrections=[];j.reviewPassed=true;j.reviewMode='original-static-text';j.seasonSummary='Lámina individual validada: se conserva y narra el texto original del usuario, sin cambios de alcance ni continuidad entre capítulos.';
+      return j;
+    }
+    if(j.reviewPass>=3)throw new Error('La revisión agotó dos rondas de corrección y una verificación final. Hay observaciones pendientes que requieren revisar el guion.');
+    const r=await generate(store,j,`Revisa ${j.type==='series'?'la continuidad de la temporada completa':'solo este video individual; no lo conviertas en una serie'}. Reporta únicamente contradicciones concretas, referencias inválidas, incumplimientos del objetivo solicitado o afirmaciones inventadas. Las preferencias estéticas y posibles expansiones no son errores. No exijas convertir elementos decorativos o de marca en protagonistas ni modificar el texto original del usuario. Esquema {issues:[{episode,problem,correction}],seasonSummary}. Revisa conocimientos, promesas y cierre. Ficha ${JSON.stringify(j.bible)}. Arco ${JSON.stringify(j.outline)}. Guiones ${JSON.stringify(j.scripts)}`,review,`review:${j.reviewPass}`);
     j.reviewPass++;for(const x of r.issues)if(x.episode<1||x.episode>j.episodes)throw new Error('La revisión menciona un capítulo inexistente.');
+    if(j.reviewPass===3&&r.issues.length){j.reviewFindings=r.issues;j.corrections=[];throw new Error('La verificación final mantiene observaciones: '+r.issues.map(x=>x.problem).join(' ').slice(0,1000));}
     const grouped=new Map();for(const x of r.issues){const old=grouped.get(x.episode);grouped.set(x.episode,old?{...x,correction:old.correction+'; '+x.correction}:x);}j.corrections=[...grouped.values()];j.reviewPassed=!r.issues.length;j.seasonSummary=r.seasonSummary;
   }
   return j;
