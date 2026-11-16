@@ -42,3 +42,28 @@ test('OpenAI recibe las referencias como imágenes y respeta el presupuesto com�
 test('el esquema estricto conserva referencias y exige las propiedades anidadas',()=>{
  const schema=strictSchema({type:'object',properties:{nested:{type:'object',properties:{label:{type:'string',default:''}}}},required:[]});assert.deepEqual(schema.required,['nested']);assert.deepEqual(schema.properties.nested.required,['label']);assert.equal(schema.properties.nested.additionalProperties,false);assert.equal(schema.properties.nested.properties.label.default,undefined);
 });
+
+test('un 400 de esquema permite una sola adaptación y conserva el diagnóstico',async t=>{
+ const {store,job}=fixture(t),original=global.fetch;t.after(()=>global.fetch=original);let calls=0;
+ const schema={type:'object',properties:{shots:{type:'array',minItems:4,maxItems:4,items:{type:'object',properties:{objects:{type:'array',minItems:1,maxItems:12,items:{type:'string',const:'helmet'}}}}}}};
+ const initial=JSON.stringify(schema);
+ global.fetch=async(url,opts)=>{calls++;const sent=JSON.parse(opts.body).generationConfig.responseJsonSchema;
+  if(calls===1){assert.equal(sent.properties.shots.maxItems,4);return {ok:false,status:400,json:async()=>({error:{message:'Response schema has too many states fake-gemini',status:'INVALID_ARGUMENT'}})};}
+  assert.equal(sent.properties.shots.maxItems,undefined);assert.equal(sent.properties.shots.items.properties.objects.minItems,1);assert.deepEqual(sent.properties.shots.items.properties.objects.items.enum,['helmet']);
+  return {ok:true,json:async()=>({candidates:[{content:{parts:[{text:'{"text":"Listo"}'}]}}],usageMetadata:{totalTokenCount:20}})};
+ };
+ await requestText(store,job,job.id+':code-art:400',{...args,schema});assert.equal(calls,2);assert.equal(JSON.stringify(schema),initial);assert.equal(store.interruptedCharges(job.id).length,0);
+ assert.ok(Object.values(job.geminiSchemaModes).includes('compact'));
+ const details=store.db.prepare('SELECT data FROM generation_error_details').all();assert.equal(details.length,1);assert.ok(!details[0].data.includes('fake-gemini'));
+});
+test('un 400 ajeno al esquema muestra su causa sin repetir ni cambiar proveedor',async t=>{
+ const {store,job}=fixture(t),original=global.fetch;t.after(()=>global.fetch=original);let calls=0;
+ global.fetch=async()=>{calls++;return {ok:false,status:400,json:async()=>({error:{message:'Invalid maxOutputTokens; key=fake-gemini'}})};};
+ await assert.rejects(requestText(store,job,job.id+':400',args),e=>e.message.includes('Invalid maxOutputTokens')&&!e.message.includes('fake-gemini'));assert.equal(calls,1);
+});
+test('otro 400 después de compactar se detiene sin bucles y recuerda la adaptación',async t=>{
+ const {store,job}=fixture(t),original=global.fetch;t.after(()=>global.fetch=original);let calls=0;
+ global.fetch=async()=>{calls++;return {ok:false,status:400,json:async()=>({error:{message:'Response schema unsupported'}})};};
+ const id=job.id+':400-repeat';await assert.rejects(requestText(store,job,id,args),/schema unsupported/);assert.equal(calls,2);
+ await assert.rejects(requestText(store,job,id,args),/schema unsupported/);assert.equal(calls,3);assert.equal(store.interruptedCharges(job.id).length,0);
+});
