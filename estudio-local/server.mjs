@@ -1,5 +1,5 @@
 import {createEditorial} from './editorial.mjs';
-import {installCodeArtPack,resourceStatus,defaultResourceRoot} from './code-art-pack.mjs';
+import {installCodeArtPack,installCodeArtFolder,resourceCatalog,resourceStatus,defaultResourceRoot} from './code-art-pack.mjs';
 import {textSettings} from './text-provider.mjs';
 import {prepareReexport,reexportSaved} from './reexport.mjs';
 import {prepareImages,needsImageGeneration} from './image-planner.mjs';
@@ -75,6 +75,7 @@ const server=http.createServer(async(req,res)=>{try{
   if(req.method==='GET'&&url.pathname==='/api/state'){json(res,200,await state());return;}
   if(req.method==='GET'&&url.pathname==='/api/volumes'){let names=[];try{names=await readdir('/Volumes');}catch{}json(res,200,{volumes:await Promise.all(names.filter(n=>n!=='Recovery').map(n=>storageStatus(path.join('/Volumes',n))))});return;}
   if(req.method==='GET'&&url.pathname.startsWith('/api/jobs/')){const id=url.pathname.split('/')[3],j=store.getJob(id);json(res,200,{...j,pauseRequested:pauses.has(j.id),audio:Object.fromEntries(Object.entries(j.audio).map(([k,a])=>[k,{duration:a.duration,voiceId:a.voiceId,model:a.model}])),root:j.root});return;}
+  if(req.method==='GET'&&url.pathname==='/api/code-art/catalog'){json(res,200,{paths:resourceCatalog});return;}
   if(req.method==='GET'&&url.pathname.startsWith('/editorial-file/')){
     const [,,id,index]=url.pathname.split('/'),j=store.getJob(id),item=j.purpose==='editorial'&&j.editorialFiles?.[Number(index)];
     if(!item)throw new Error('Archivo editorial no encontrado.');await access(item.file);res.writeHead(200,{'Content-Type':item.type,'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'});createReadStream(item.file).pipe(res);return;
@@ -160,6 +161,10 @@ const server=http.createServer(async(req,res)=>{try{
         const n=j.approvalEpisode;if(!j.previews?.[n])throw new Error('Falta el borrador de revisión.');j.visualApprovals||={};j.visualApprovals[n]=true;
       }else throw new Error('No hay una revisión pendiente de aprobación.');
       j.awaitingApproval=null;record(j,'Revisión aprobada. Pulsa Producir para continuar.');
+    }
+    else if(url.pathname==='/api/code-art/folder'){
+      if(active.size||admitting||queue.pending.length)throw new Error('Espera a que termine la producción antes de importar recursos.');
+      admitting=true;try{await installCodeArtFolder(data.files);}finally{admitting=false;}
     }
     else if(url.pathname==='/api/code-art/import'){
       if(active.size||admitting||queue.pending.length)throw new Error('Espera a que termine la producción antes de importar recursos.');

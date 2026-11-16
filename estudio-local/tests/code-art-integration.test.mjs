@@ -30,3 +30,20 @@ test('las entregas incluyen cuatro redes y comentario sin inventar textos antigu
  const text=descriptions({title:'Video',instagramCopy:'IG',facebookCopy:'FB',tiktokCopy:'TT',youtubeCopy:'YT',pinnedComment:'Pregunta'});for(const name of ['Instagram Reels','Facebook Reels','TikTok','YouTube Shorts','Comentario fijado'])assert.ok(text.includes(name));
  assert.ok(descriptions({}).includes('No generado en esta versión'));
 });
+
+test('la importación de carpeta no instala scripts de package.json ni acepta archivos ajenos',async()=>{
+ const {installCodeArtFolder}=await import('../code-art-pack.mjs'),root=await mkdtemp(path.join(tmpdir(),'folder-import-'));
+ try{
+  const license=await readFile(new URL('../licenses/Figtree-OFL.txt',import.meta.url)),files=[{path:'letra/OFL.txt',data:license.toString('base64')},{path:'package.json',data:Buffer.from(JSON.stringify({scripts:{postinstall:'unwanted'},imports:{'#kit':'/outside.js'}})).toString('base64')}];
+  await installCodeArtFolder(files,root);const config=JSON.parse(await readFile(path.join(root,'package.json'),'utf8'));assert.equal(config.scripts,undefined);assert.equal(config.imports['#kit'],'./motor/kit/index.js');assert.equal(config.imports['#voz'],'./motor/lib/voz-actual.js');
+  await assert.rejects(installCodeArtFolder([{path:'.env.local',data:'AA=='}],root),/ruta/);
+  await assert.rejects(installCodeArtFolder([{path:'../outside.js',data:'AA=='}],root),/ruta/);
+ }finally{await rm(root,{recursive:true,force:true});}
+});
+test('la importación local no sigue enlaces simbólicos al escribir recursos',async()=>{
+ const {installCodeArtFolder}=await import('../code-art-pack.mjs'),{symlink,access}=await import('node:fs/promises'),root=await mkdtemp(path.join(tmpdir(),'folder-link-')),outside=await mkdtemp(path.join(tmpdir(),'folder-outside-'));
+ try{
+  await symlink(outside,path.join(root,'letra'),'dir');const license=await readFile(new URL('../licenses/Figtree-OFL.txt',import.meta.url));
+  await assert.rejects(installCodeArtFolder([{path:'letra/OFL.txt',data:license.toString('base64')}],root),/enlace/);await assert.rejects(access(path.join(outside,'OFL.txt')));
+ }finally{await rm(root,{recursive:true,force:true});await rm(outside,{recursive:true,force:true});}
+});

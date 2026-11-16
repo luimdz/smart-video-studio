@@ -1,11 +1,11 @@
 # Texto con dos proveedores y producción CODE ART
 
-Esta entrega amplía el motor local. No se instala en el Mac al integrar el PR: hay que actualizar la copia local, reiniciar el servicio e importar el paquete de recursos una vez.
+Esta entrega amplía el motor local. No se instala en el Mac al integrar el PR: hay que actualizar la copia local, reiniciar el servicio e importar los recursos una vez desde la carpeta original del Mac.
 
 ## Activar y probar
 
 1. Actualizar `main` con el motor detenido, instalar dependencias con `npm ci` y arrancar el servicio. Recargar el navegador con Cmd+Shift+R. El pie muestra `v0.2 · Texto y CODE ART`.
-2. Abrir **Configuración** e importar `code-art-upgrade.studio.json`. La aplicación verifica las rutas, tamaños y SHA-256 antes de instalar. Conserva copia de los archivos reemplazados en `resources/code-art/.backups/`. Debe mostrar motor encontrado y 31 de 31 efectos.
+2. Abrir **Configuración → Importar carpeta CODE ART** y seleccionar la carpeta original que contiene `motor`, `sonidos` y `letra`. Solo se leen nombres de recursos reconocidos; se excluyen las claves y producciones. Los archivos de código, guías y sonidos se comprueban por tamaño y SHA-256; las tres fuentes originales se admiten como TTF/OpenType con límite de tamaño. Se reconstruye un mapa de importaciones mínimo sin scripts de instalación. La transferencia es entre el navegador y el motor local del mismo Mac, sin subir los recursos a servicios externos. También se admite un paquete JSON local compatible. Conserva copia de los archivos reemplazados en `resources/code-art/.backups/`. Debe mostrar motor encontrado y 31 de 31 efectos.
 3. Elegir **OpenAI** como proveedor de texto, verificar el modelo y guardar. La clave OpenAI guardada sirve para texto e imágenes si la cuenta tiene acceso a ambos servicios. No se vuelve a mostrar ni hay que pegarla en el chat.
 4. Para continuar un trabajo detenido por 503, volver a Producciones y pulsar Producir. Conserva ficha, guiones, voces e imágenes ya confirmados. Los trabajos antiguos conservan sus opciones de revisión; las nuevas solicitudes 2D ofrecen revisión del guion y del borrador.
 5. Para un reel nuevo, elegir Animación 2D, activar efectos y las revisiones. Aprobar el guion antes de la voz, revisar el borrador y sus escenas y aprobar antes del render final. Tras aprobar, pulsar Producir para continuar.
@@ -21,7 +21,7 @@ Los pasos siguen el contrato n8n existente: no hace falta cambiar el coordinador
 
 ## Integración de los adjuntos
 
-El paquete local reconstruye 109 archivos: 10 del kit, 11 de librerías, piezas reutilizables, guías, ejemplos, 31 sonidos y fuentes. Los adjuntos originales permanecen fuera del código público; el repositorio contiene el importador y el manifiesto de integridad. Las fuentes Figtree oficiales se incluyen con su licencia OFL y se instancian en pesos 500, 700 y 800.
+El manifiesto reconoce 109 archivos: 10 del kit, 11 de librerías, piezas reutilizables, guías, ejemplos, 31 sonidos y fuentes. Los adjuntos originales permanecen fuera del código público; el repositorio contiene el importador y el manifiesto de integridad. La carpeta original puede contener más archivos: los que no estén en el catálogo no se leen ni se importan. Las fuentes Figtree oficiales se incluyen con su licencia OFL y se instancian en pesos 500, 700 y 800.
 
 | Idea del material | Aplicación actual |
 |---|---|
@@ -32,7 +32,7 @@ El paquete local reconstruye 109 archivos: 10 del kit, 11 de librerías, piezas 
 | Planos que respeten frases | Ventanas por frases y recorridos de hasta 20 segundos, en lugar de cortes fijos cada cinco segundos |
 | Revisión visual antes de renderizar todo | Borrador de cada capítulo a 540×960/15 fps, fotogramas por plano y aprobación antes del final a 1080×1920/60 fps |
 | Subtítulos superiores y legibles | Tipografía Figtree original y sombra reforzada |
-| Efectos con acciones y bajo la voz | 31 sonidos importables y escuchables; selección por acción/material, límites de plano y opción de silenciarlos |
+| Efectos con acciones y bajo la voz | 31 sonidos importables desde la carpeta local y escuchables; selección por acción/material, límites de plano y opción de silenciarlos |
 | Portadas y descripciones | Tres portadas del 2D, portada seleccionada descargable y textos para Instagram, TikTok, YouTube y Facebook más comentario fijado |
 | Memoria de marca | Variante de español, color, cuentas sociales, cierre y preferencias permanentes editables; no se inventan preferencias desde correcciones |
 | Temas, calendario y series | Borradores editoriales, historial de temas como contexto, calendario de 30 propuestas y plan de cinco partes; producción de series de 3–25 capítulos |
