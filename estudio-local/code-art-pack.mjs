@@ -1,0 +1,43 @@
+import {createHash,randomUUID} from 'node:crypto';
+import {readFile,writeFile,mkdir,rename,access,readdir,copyFile,lstat} from 'node:fs/promises';
+import path from 'node:path';
+import {fileURLToPath} from 'node:url';
+const manifest=JSON.parse(await readFile(new URL('./code-art-pack-manifest.json',import.meta.url),'utf8'));
+export const defaultResourceRoot=fileURLToPath(new URL('./resources/code-art/',import.meta.url));
+export async function installCodeArtPack(pack,root=defaultResourceRoot){
+ if(pack?.format!=='smart-studio-code-art'||pack.version!==1||!Array.isArray(pack.files))throw Error('El archivo no es el paquete CODE ART compatible.');
+ const expected=Object.keys(manifest.files),seen=new Set(),decoded=[];
+ if(pack.files.length!==expected.length)throw Error('El paquete está incompleto. Importa el archivo completo.');
+ for(const f of pack.files){
+  if(!manifest.files[f.path]||seen.has(f.path)||typeof f.data!=='string')throw Error('El paquete contiene una ruta desconocida o repetida.');
+  seen.add(f.path);const buffer=Buffer.from(f.data,'base64'),entry=manifest.files[f.path];
+  if(buffer.length!==entry.bytes||createHash('sha256').update(buffer).digest('hex')!==entry.sha256)throw Error('La integridad del paquete no coincide: '+f.path);
+  decoded.push({relative:f.path,buffer});
+ }
+ const backup=path.join(root,'.backups',randomUUID()),written=[];
+ await mkdir(root,{recursive:true});
+ try{
+  for(const f of decoded){
+   const dest=path.join(root,f.relative);await mkdir(path.dirname(dest),{recursive:true});
+   // Never follow pre-existing symlinks while importing a resource bundle.
+   for(let at=dest;at!==path.dirname(root);at=path.dirname(at)){
+    try{if((await lstat(at)).isSymbolicLink())throw Error('El destino contiene un enlace simbólico: '+f.relative);}catch(e){if(e.code!=='ENOENT')throw e;}
+    if(at===root)break;
+   }
+   let old=false;try{await access(dest);await mkdir(path.dirname(path.join(backup,f.relative)),{recursive:true});await copyFile(dest,path.join(backup,f.relative));old=true;}catch(e){if(e.code!=='ENOENT')throw e;}
+   const pending=dest+'.'+randomUUID()+'.pending';await writeFile(pending,f.buffer);await rename(pending,dest);written.push({...f,dest,old});
+  }
+ }catch(error){const {rm}=await import('node:fs/promises');for(const f of written.reverse()){if(f.old)await copyFile(path.join(backup,f.relative),f.dest);else await rm(f.dest,{force:true});}throw error;}
+ return resourceStatus(root);
+}
+export async function resourceStatus(root=defaultResourceRoot){
+ const required=[...Object.keys(manifest.files).filter(n=>n.startsWith('motor/kit/')),'package.json','letra/Figtree-Medium.ttf','letra/Figtree-ExtraBold.ttf','motor/kit/index.js','motor/lib/mezcla.mjs','motor/lib/comun.mjs','motor/lib/subtitulos.mjs','motor/lib/rotulos.mjs','letra/Figtree-Bold.ttf','piezas/objetos.js','piezas/celular.js'];
+ const missing=[];for(const name of required){try{await access(path.join(root,name));}catch{missing.push(name);}}
+ const sounds=[];for(const name of Object.keys(manifest.files).filter(n=>/^sonidos\/.+\.(mp3|wav)$/.test(n))){try{await access(path.join(root,name));sounds.push(path.basename(name,path.extname(name)));}catch{}}
+ const documents=[];for(const name of Object.keys(manifest.files).filter(n=>n.endsWith('.md')&&!n.startsWith('referencia/'))){try{await access(path.join(root,name));documents.push(name);}catch{}}
+ return {runtimeReady:!missing.length,missing,sounds,documents,packInstalled:documents.includes('METODO.md')&&sounds.length===31};
+}
+export async function readGuides(names,root=defaultResourceRoot,maxCharacters=22000){
+ const parts=[];for(const name of names){if(!manifest.files[name]||!name.endsWith('.md'))continue;try{parts.push('REFERENCIA '+name+'\n'+await readFile(path.join(root,name),'utf8'));}catch(e){if(e.code!=='ENOENT')throw e;}}
+ return parts.join('\n\n').slice(0,maxCharacters);
+}

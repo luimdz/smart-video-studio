@@ -1,3 +1,6 @@
+import {createEditorial} from './editorial.mjs';
+import {installCodeArtPack,resourceStatus,defaultResourceRoot} from './code-art-pack.mjs';
+import {textSettings} from './text-provider.mjs';
 import {prepareReexport,reexportSaved} from './reexport.mjs';
 import {prepareImages,needsImageGeneration} from './image-planner.mjs';
 import {createProductionQueue} from './production-queue.mjs';
@@ -13,7 +16,7 @@ import { fileURLToPath } from 'node:url';
 import { randomUUID, randomBytes } from 'node:crypto';
 import { mkdir, readFile, writeFile, stat, readdir, realpath, access, rm } from 'node:fs/promises';
 import { createReadStream } from 'node:fs';
-import { createStore, nextAction } from './store.mjs';
+import { createStore, nextAction, profileSchema } from './store.mjs';
 import { planningStep, voiceStep, codeArtPlanningStep } from './planner.mjs';
 import { renderEpisode, storageStatus, requireStorage, processFile, letterOverlay } from './render.mjs';
 import { z, sharp } from './deps.mjs';
@@ -29,7 +32,7 @@ const json=(res,status,data)=>{res.writeHead(status,{'Content-Type':'application
 async function body(req){let size=0,parts=[];for await(const chunk of req){size+=chunk.length;if(size>25*1024*1024)throw new Error('El archivo supera el límite de 25 MB.');parts.push(chunk);}return JSON.parse(Buffer.concat(parts).toString()||'{}');}
 function record(j,message){j.events.unshift({at:new Date().toISOString(),message});j.events=j.events.slice(0,100);store.saveJob(j);}
 function view(j){return {id:j.id,title:j.title,type:j.type,style:j.style,episodes:j.episodes,duration:j.duration,status:j.status,progress:j.progress,error:j.error,profileId:j.profileId,createdAt:j.createdAt,updatedAt:j.updatedAt,maxCredits:j.maxCredits,stage:j.stage||'',pauseRequested:pauses.has(j.id),demo:!!j.demo,scriptCount:j.scripts.length,audioCount:Object.keys(j.audio).length,videos:Object.fromEntries(Object.entries(j.videos).map(([n,v])=>[n,{duration:v.duration,bytes:v.bytes,width:v.width,height:v.height}]))};}
-async function state(){const c=store.settings(),s=store.secrets();return {profiles:store.list('profiles'),music:store.listMusic(),jobs:store.list('jobs').sort((a,b)=>b.createdAt.localeCompare(a.createdAt)).map(view),settings:c,connections:{gemini:!!s.geminiKey,openai:!!s.openaiKey,elevenlabs:!!s.elevenKey,n8nToken:!!s.n8nToken,n8n:!!(s.n8nToken&&c.n8nUrl)},usage:store.usage(),accounting:store.accounting(),storage:await storageStatus(c.storageRoot),active:active.size,queued:queue.pending};}
+async function state(){const c=store.settings(),s=store.secrets();return {profiles:store.list('profiles'),editorial:store.list('jobs').filter(j=>j.purpose==='editorial').map(j=>({id:j.id,title:j.title,status:j.status,error:j.error,result:j.editorialResult,files:(j.editorialFiles||[]).map(f=>({name:f.name,type:f.type}))})),music:store.listMusic(),jobs:store.list('jobs').filter(j=>j.purpose!=='editorial').sort((a,b)=>b.createdAt.localeCompare(a.createdAt)).map(view),settings:c,connections:{gemini:!!s.geminiKey,openai:!!s.openaiKey,elevenlabs:!!s.elevenKey,n8nToken:!!s.n8nToken,n8n:!!(s.n8nToken&&c.n8nUrl)},usage:store.usage(),accounting:store.accounting(),storage:await storageStatus(c.storageRoot),codeArt:await resourceStatus(),active:active.size,queued:queue.pending};}
 async function coordinate(j){
   const c=store.settings(),s=store.secrets();if(!c.useN8n)throw new Error('Conecta n8n para coordinar la producción.');
   const u=new URL(c.n8nUrl);if(u.protocol!=='https:'||u.hostname!=='n8n.planifyx.com')throw new Error('La dirección debe pertenecer a tu instancia n8n.planifyx.com y usar HTTPS.');
@@ -38,15 +41,19 @@ async function coordinate(j){
   const raw=await r.json(),result=Array.isArray(raw)?raw[0]:raw;
   if(result.productionId!==j.id||result.protocolVersion!==1||result.action!==nextAction(j))throw new Error('n8n devolvió una instrucción fuera del contrato esperado.');return result.action;
 }
-async function preflight(j){if(j.style==='2d')await ensureCodeArt();const c=store.settings(),s=store.secrets(),p=store.list('profiles').find(p=>p.id===j.profileId);await requireStorage(c.storageRoot);for(const image of [...(j.referenceImages||[]),...(j.productionImages||[]),...(j.useLogo&&j.logo?[j.logo]:[]),...(j.useMusic&&j.music?[j.music]:[])]){try{await access(image.file);}catch{throw new Error('No se encuentra una imagen adjunta. Conecta el disco donde la guardaste antes de producir.');}}if(needsImageGeneration(j,p)&&j.imageProvider==='openai'&&!s.openaiKey)throw new Error('Guarda la clave de OpenAI en Configuración para usar GPT Image 2.');if(!s.geminiKey)throw new Error('Configura la clave de Gemini.');if(j.narrationEnabled!==false&&!s.elevenKey)throw new Error('Configura la clave de ElevenLabs.');if(j.narrationEnabled!==false&&!p?.voiceId)throw new Error('Selecciona una voz para este perfil.');if(!c.n8nUrl||!s.n8nToken)throw new Error('Configura el workflow coordinador de n8n.');if(store.interruptedCharges(j.id).length)throw new Error('Hay una llamada de resultado incierto. Revisa el proveedor antes de repetir; la aplicación no volverá a cobrarla automáticamente.');}
+async function preflight(j){if(j.style==='2d')await ensureCodeArt();const c=store.settings(),s=store.secrets(),p=store.list('profiles').find(p=>p.id===j.profileId);await requireStorage(c.storageRoot);for(const image of [...(j.referenceImages||[]),...(j.productionImages||[]),...(j.useLogo&&j.logo?[j.logo]:[]),...(j.useMusic&&j.music?[j.music]:[])]){try{await access(image.file);}catch{throw new Error('No se encuentra una imagen adjunta. Conecta el disco donde la guardaste antes de producir.');}}if(needsImageGeneration(j,p)&&j.imageProvider==='openai'&&!s.openaiKey)throw new Error('Guarda la clave de OpenAI en Configuración para usar GPT Image 2.');const text=textSettings(c,s);if(!text.key)throw new Error(`Configura la clave de ${text.provider==='openai'?'OpenAI':'Gemini'} para texto en Configuración.`);if(j.narrationEnabled!==false&&!s.elevenKey)throw new Error('Configura la clave de ElevenLabs.');if(j.narrationEnabled!==false&&!p?.voiceId)throw new Error('Selecciona una voz para este perfil.');if(!c.n8nUrl||!s.n8nToken)throw new Error('Configura el workflow coordinador de n8n.');if(store.interruptedCharges(j.id).length)throw new Error('Hay una llamada de resultado incierto. Revisa el proveedor antes de repetir; la aplicación no volverá a cobrarla automáticamente.');}
 async function run(id){let j=store.getJob(id);active.add(id);pauses.delete(id);try{
   j.status='running';j.root=j.root||await requireStorage(store.settings().storageRoot);record(j,j.narrationEnabled===false?'Producción sin narración iniciada. No se consumen créditos de ElevenLabs.':'Producción iniciada. Las voces se generan después de revisar todos los guiones.');
   while(true){if(pauses.has(id)){j.status='paused';record(j,'Pausada después de guardar la etapa actual.');break;}
     const action=await coordinate(j);j.stage=action;store.saveJob(j);
     if(action==='complete'){j.status='ready';j.progress=100;record(j,'Todos los videos y copies están guardados localmente. Publicación Meta pendiente de conectar.');break;}
+    if(action==='voice'&&j.reviewBeforeVoice&&!j.scriptApproved){j.status='paused';j.awaitingApproval='script';record(j,'Guiones listos para tu revisión. Apruébalos antes de generar voz.');break;}
     if(['bible','outline','script','correct','review'].includes(action))j=await planningStep(store,j,action);
     else if(action==='voice'){const n=j.scripts.findIndex((_,i)=>!j.audio[i+1])+1;j=await prepareImages(store,j,n);if(pauses.has(id))continue;j=await voiceStep(store,j,j.root);}
-    else if(action==='render'){const n=j.scripts.findIndex((_,i)=>!j.videos[i+1])+1;const profile=store.list('profiles').find(p=>p.id===j.profileId);if(j.style!=='2d')j=await prepareImages(store,j,n);if(pauses.has(id))continue;if(j.style==='2d')j=await codeArtPlanningStep(store,j,n);if(pauses.has(id))continue;j.videos[n]=await renderEpisode(j,profile,n,j.root);}
+    else if(action==='render'){const n=j.scripts.findIndex((_,i)=>!j.videos[i+1])+1;const profile=store.list('profiles').find(p=>p.id===j.profileId);if(j.style!=='2d')j=await prepareImages(store,j,n);if(pauses.has(id))continue;if(j.style==='2d')j=await codeArtPlanningStep(store,j,n);if(pauses.has(id))continue;if(j.style==='2d'&&j.reviewBeforeFinal&&!j.visualApprovals?.[n]){
+        j.previews||={};if(!j.previews[n])j.previews[n]=await renderEpisode(j,profile,n,j.root,{width:540,height:960,preview:true});
+        j.status='paused';j.awaitingApproval='visual';j.approvalEpisode=n;record(j,`Borrador del capítulo ${n} listo. Revisa sus escenas y aprueba antes del render final.`);break;
+      }j.videos[n]=await renderEpisode(j,profile,n,j.root);}
     j.progress=Math.round((Number(!!j.bible)+Number(!!j.outline)+j.scripts.length+Number(j.reviewPassed)+Object.keys(j.audio).length+Object.keys(j.videos).length)/(3+3*j.episodes)*100);record(j,`Etapa guardada: ${action}.`);
     await writeFile(path.join(j.root,'productions',j.id+'.json'),JSON.stringify(j,null,2)).catch(async e=>{if(e.code!=='ENOENT')throw e;await mkdir(path.join(j.root,'productions'),{recursive:true});await writeFile(path.join(j.root,'productions',j.id+'.json'),JSON.stringify(j,null,2));});
   }
@@ -68,14 +75,30 @@ const server=http.createServer(async(req,res)=>{try{
   if(req.method==='GET'&&url.pathname==='/api/state'){json(res,200,await state());return;}
   if(req.method==='GET'&&url.pathname==='/api/volumes'){let names=[];try{names=await readdir('/Volumes');}catch{}json(res,200,{volumes:await Promise.all(names.filter(n=>n!=='Recovery').map(n=>storageStatus(path.join('/Volumes',n))))});return;}
   if(req.method==='GET'&&url.pathname.startsWith('/api/jobs/')){const id=url.pathname.split('/')[3],j=store.getJob(id);json(res,200,{...j,pauseRequested:pauses.has(j.id),audio:Object.fromEntries(Object.entries(j.audio).map(([k,a])=>[k,{duration:a.duration,voiceId:a.voiceId,model:a.model}])),root:j.root});return;}
+  if(req.method==='GET'&&url.pathname.startsWith('/editorial-file/')){
+    const [,,id,index]=url.pathname.split('/'),j=store.getJob(id),item=j.purpose==='editorial'&&j.editorialFiles?.[Number(index)];
+    if(!item)throw new Error('Archivo editorial no encontrado.');await access(item.file);res.writeHead(200,{'Content-Type':item.type,'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'});createReadStream(item.file).pipe(res);return;
+  }
+  if(req.method==='GET'&&['/cover/','/descriptions/','/preview-frame/'].some(prefix=>url.pathname.startsWith(prefix))){
+    const [,kind,id,n,index]=url.pathname.split('/'),j=store.getJob(id),v=j.videos[n]||j.previews?.[n];
+    const file=kind==='preview-frame'?j.previews?.[n]?.reviewFrames?.[Number(index)]:kind==='cover'?v?.cover:v?.descriptions;
+    if(!file)throw new Error('Archivo de entrega no disponible.');await access(file);
+    res.writeHead(200,{'Content-Type':kind==='descriptions'?'text/markdown; charset=utf-8':'image/jpeg','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'});createReadStream(file).pipe(res);return;
+  }
+  if(req.method==='GET'&&url.pathname.startsWith('/effect/')){
+    const name=url.pathname.slice('/effect/'.length),status=await resourceStatus();
+    if(!status.sounds.includes(name))throw new Error('Efecto no encontrado.');
+    const manifest=JSON.parse(await readFile(path.join(here,'code-art-pack-manifest.json'),'utf8')),rel=Object.keys(manifest.files).find(n=>n.startsWith('sonidos/')&&path.basename(n,path.extname(n))===name);
+    res.writeHead(200,{'Content-Type':rel.endsWith('.wav')?'audio/wav':'audio/mpeg','Cache-Control':'no-store'});createReadStream(path.join(defaultResourceRoot,rel)).pipe(res);return;
+  }
   if(req.method==='GET'&&url.pathname.startsWith('/image/')){const [, ,id,n]=url.pathname.split('/'),v=store.getJob(id).videos[n];if(!v?.image)throw new Error('Imagen no encontrada.');await access(v.image);res.writeHead(200,{'Content-Type':'image/png','Cache-Control':'no-store'});createReadStream(v.image).pipe(res);return;}
-  if(req.method==='GET'&&url.pathname.startsWith('/video/')){const [, ,id,n]=url.pathname.split('/'),j=store.getJob(id),v=j.videos[n];if(!v)throw new Error('Video no encontrado.');const info=await stat(v.file),range=req.headers.range;const headers={'Content-Type':'video/mp4','Accept-Ranges':'bytes','Cache-Control':'no-store'};if(range){const match=/^bytes=(\d+)-(\d*)$/.exec(range);if(!match){res.writeHead(416);res.end();return;}const start=Number(match[1]),end=Math.min(Number(match[2]||info.size-1),info.size-1);if(start>end){res.writeHead(416);res.end();return;}res.writeHead(206,{...headers,'Content-Length':end-start+1,'Content-Range':`bytes ${start}-${end}/${info.size}`});createReadStream(v.file,{start,end}).pipe(res);}else{res.writeHead(200,{...headers,'Content-Length':info.size});createReadStream(v.file).pipe(res);}return;}
+  if(req.method==='GET'&&(url.pathname.startsWith('/video/')||url.pathname.startsWith('/preview/'))){const [, ,id,n]=url.pathname.split('/'),j=store.getJob(id),v=url.pathname.startsWith('/preview/')?j.previews?.[n]:j.videos[n];if(!v)throw new Error('Video no encontrado.');const info=await stat(v.file),range=req.headers.range;const headers={'Content-Type':'video/mp4','Accept-Ranges':'bytes','Cache-Control':'no-store'};if(range){const match=/^bytes=(\d+)-(\d*)$/.exec(range);if(!match){res.writeHead(416);res.end();return;}const start=Number(match[1]),end=Math.min(Number(match[2]||info.size-1),info.size-1);if(start>end){res.writeHead(416);res.end();return;}res.writeHead(206,{...headers,'Content-Length':end-start+1,'Content-Range':`bytes ${start}-${end}/${info.size}`});createReadStream(v.file,{start,end}).pipe(res);}else{res.writeHead(200,{...headers,'Content-Length':info.size});createReadStream(v.file).pipe(res);}return;}
   if(req.method==='POST'){
     const data=await body(req);
     if(url.pathname==='/api/profiles')store.addProfile(data);
     else if(url.pathname==='/api/jobs'){store.addJob(data);}
     else if(url.pathname==='/api/settings'){
-      const config=z.object({storageRoot:z.string().min(1).max(1000),voiceModel:z.enum(['eleven_flash_v2_5','eleven_multilingual_v2']),monthlyCredits:z.number().int().min(100).max(30000),monthlyImages:z.number().int().min(1).max(10000).default(100),monthlyTextTokens:z.number().int().min(1000).max(100000000).default(500000),n8nUrl:z.union([z.literal(''),z.string().url()]),useN8n:z.boolean().default(true)}).parse(data);
+      const config=z.object({storageRoot:z.string().min(1).max(1000),textProvider:z.enum(['gemini','openai']).default('gemini'),textFallback:z.boolean().default(true),openaiTextModel:z.string().regex(/^[a-zA-Z0-9._:-]+$/).max(100).default('gpt-4.1-mini'),voiceModel:z.enum(['eleven_flash_v2_5','eleven_multilingual_v2']),monthlyCredits:z.number().int().min(100).max(30000),monthlyImages:z.number().int().min(1).max(10000).default(100),monthlyTextTokens:z.number().int().min(1000).max(100000000).default(500000),n8nUrl:z.union([z.literal(''),z.string().url()]),useN8n:z.boolean().default(true)}).parse(data);
       if(active.size)throw new Error('Espera a que termine el trabajo antes de cambiar la configuración.');
       if(config.n8nUrl){const u=new URL(config.n8nUrl);if(u.protocol!=='https:'||u.hostname!=='n8n.planifyx.com')throw new Error('Usa la URL HTTPS de tu instancia n8n.planifyx.com.');}
       const selected=path.resolve(config.storageRoot);if(selected===path.parse(selected).root)throw new Error('Selecciona una carpeta de biblioteca, no la raíz del disco.');await access(path.dirname(selected));await mkdir(selected,{recursive:true});config.storageRoot=await requireStorage(selected);store.saveSettings(config,data.secrets||{});
@@ -120,6 +143,28 @@ const server=http.createServer(async(req,res)=>{try{
       json(res,200,{id:store.addMedia({kind,file})});return;
     }
     else if(url.pathname==='/api/assets'){const p=store.list('profiles').find(p=>p.id===data.profileId);if(!p)throw new Error('Perfil no encontrado.');if((p.assets||[]).length>=30)throw new Error('Este perfil ya tiene 30 imágenes.');const image=z.string().max(24000000).parse(data.image),match=/^data:image\/(png|jpeg|webp);base64,([A-Za-z0-9+/=\r\n]+)$/.exec(image);if(!match)throw new Error('Usa una imagen PNG, JPG o WebP.');const root=await requireStorage(p.assetsRoot||store.settings().storageRoot),folder=path.join(root,'assets');await mkdir(folder,{recursive:true});const buffer=Buffer.from(match[2],'base64'),decoder=sharp(buffer,{limitInputPixels:40000000}),metadata=await decoder.metadata();if(!['png','jpeg','webp'].includes(metadata.format))throw new Error('El archivo no es una imagen PNG, JPG o WebP válida.');const name=randomUUID()+'.png';await decoder.resize({width:1920,height:1920,fit:'inside',withoutEnlargement:true}).png().toFile(path.join(folder,name));p.assets=[...(p.assets||[]),name];p.assetsRoot=root;store.db.prepare('UPDATE profiles SET data=? WHERE id=?').run(JSON.stringify(p),p.id);}
+    else if(url.pathname==='/api/editorial'){
+      if(admitting||active.size)throw new Error('Espera a que termine el trabajo activo antes de generar contenido editorial.');
+      admitting=true;try{await createEditorial(store,{...data,sourceJobId:data.sourceJobId||null});}finally{admitting=false;}
+    }
+    else if(url.pathname==='/api/profile-preferences'){
+      if(active.size)throw new Error('Espera a que termine la producción antes de modificar la marca.');
+      const p=store.list('profiles').find(p=>p.id===data.id);if(!p)throw new Error('Perfil no encontrado.');
+      const edited=profileSchema.parse({...p,...data});store.db.prepare('UPDATE profiles SET data=? WHERE id=?').run(JSON.stringify({...p,...edited}),p.id);
+    }
+    else if(url.pathname==='/api/approve'){
+      const j=store.getJob(data.id);if(active.has(j.id)||queue.pending.includes(j.id))throw new Error('Pausa el trabajo antes de aprobar.');
+      if(j.awaitingApproval==='script'){
+        if(!j.reviewPassed||j.scripts.length!==j.episodes||Object.keys(j.audio).length)throw new Error('El guion todavía no está listo para aprobar.');j.scriptApproved=true;
+      }else if(j.awaitingApproval==='visual'){
+        const n=j.approvalEpisode;if(!j.previews?.[n])throw new Error('Falta el borrador de revisión.');j.visualApprovals||={};j.visualApprovals[n]=true;
+      }else throw new Error('No hay una revisión pendiente de aprobación.');
+      j.awaitingApproval=null;record(j,'Revisión aprobada. Pulsa Producir para continuar.');
+    }
+    else if(url.pathname==='/api/code-art/import'){
+      if(active.size||admitting||queue.pending.length)throw new Error('Espera a que termine la producción antes de importar recursos.');
+      admitting=true;try{await installCodeArtPack(data.pack);}finally{admitting=false;}
+    }
     else if(url.pathname==='/api/reexport'){
       if(admitting||active.size||queue.current||queue.pending.length)throw new Error('Espera a que termine la cola antes de reexportar.');
       admitting=true;

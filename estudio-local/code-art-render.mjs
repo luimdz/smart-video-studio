@@ -6,7 +6,7 @@ const input=JSON.parse(await readFile(process.argv[2],'utf8')),frames=await crea
 await mkdir(input.dir,{recursive:true});
 for(const t of frames.shots.map(s=>Math.min(limit-.01,(s.from+s.to)/2)).filter(t=>t>=0&&t<limit))await writeFile(path.join(input.dir,`revision-${t.toFixed(2)}.jpg`),frames.draw(t).toBuffer('image/jpeg'));
 const [{mezclar,huecos},{leerAudio,escribirWav}]=await Promise.all([import(codeArtUrl('motor/lib/mezcla.mjs')),import(codeArtUrl('motor/lib/comun.mjs'))]);
-const events=codeArtSoundEvents(frames.shots,frames.words,limit);
+const events=codeArtSoundEvents(frames.shots,frames.words,limit,{enabled:input.useEffects!==false});
 const voice=leerAudio(input.audio.file),{pista,usados}=mezclar(events,voice),effects=path.join(input.dir,'effects.wav');escribirWav(effects,pista);
 await writeFile(path.join(input.dir,'sound-review.json'),JSON.stringify({events:usados,gaps:huecos(pista,2)},null,2));
 const {titular,legible}=await import(codeArtUrl('motor/lib/rotulos.mjs'));
