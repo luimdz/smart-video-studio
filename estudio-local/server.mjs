@@ -1,3 +1,5 @@
+import {nextVisualRecovery} from './code-art-recovery.mjs';
+import {buildCodeArtRequest} from './code-art-plan-request.mjs';
 import {checkCodeArtBudget} from './code-art-budget.mjs';
 import {createEditorial} from './editorial.mjs';
 import {installCodeArtPack,installCodeArtFolder,resourceCatalog,resourceStatus,defaultResourceRoot} from './code-art-pack.mjs';
@@ -58,7 +60,7 @@ async function run(id){let j=store.getJob(id);active.add(id);pauses.delete(id);t
     j.progress=Math.round((Number(!!j.bible)+Number(!!j.outline)+j.scripts.length+Number(j.reviewPassed)+Object.keys(j.audio).length+Object.keys(j.videos).length)/(3+3*j.episodes)*100);record(j,`Etapa guardada: ${action}.`);
     await writeFile(path.join(j.root,'productions',j.id+'.json'),JSON.stringify(j,null,2)).catch(async e=>{if(e.code!=='ENOENT')throw e;await mkdir(path.join(j.root,'productions'),{recursive:true});await writeFile(path.join(j.root,'productions',j.id+'.json'),JSON.stringify(j,null,2));});
   }
- }catch(error){j.status=error.code==='TEXT_BUDGET_EXCEEDED'?'paused':'failed';j.budgetBlock=error.budget||null;j.error=error.issues?.[0]?.message||error.message;record(j,(error.budget?'Producción pausada antes de consumir más APIs: ':'La producción se detuvo: ')+j.error);}finally{active.delete(id);pauses.delete(id);store.saveJob(j);}}
+ }catch(error){j.status=['TEXT_BUDGET_EXCEEDED','CODE_ART_REVIEW_REQUIRED'].includes(error.code)?'paused':'failed';j.visualReview=error.visualReview||null;j.budgetBlock=error.budget||null;j.error=error.issues?.[0]?.message||error.message;record(j,(error.budget?'Producción pausada antes de consumir más APIs: ':'La producción se detuvo: ')+j.error);}finally{active.delete(id);pauses.delete(id);store.saveJob(j);}}
 async function demo(){if(active.size)throw new Error('Espera a que termine la exportación actual.');let profile=store.list('profiles')[0];if(!profile)profile=store.addProfile({name:'Prueba local',niche:'Demostración del estudio',audience:'Propietario',brief:'Perfil de prueba creado al solicitar el render de demostración.'});
   const j=store.addJob({profileId:profile.id,title:'Tu estudio, en movimiento',topic:'Prueba local de exportación, sin IA ni voz de proveedor.',type:'video',style:'motion',episodes:1,duration:30,maxCredits:100,requestKey:randomUUID()});j.demo=true;j.status='running';j.root=await requireStorage(store.settings().storageRoot);j.scripts=[{number:1,title:j.title,coverTitle:'Tu estudio, en movimiento',scenes:[],facebookCopy:'Demostración técnica. Sin voz de ElevenLabs.',instagramCopy:'Demostración técnica. Sin voz de ElevenLabs.'}];j.bible={characters:[{id:'demo-presenter'}]};active.add(j.id);store.saveJob(j);
   void(async()=>{try{const dir=path.join(j.root,'productions',j.id);await mkdir(dir,{recursive:true});const file=path.join(dir,'test-tone.wav');await processFile('ffmpeg',['-hide_banner','-loglevel','error','-y','-f','lavfi','-i','sine=frequency=440:duration=8','-af','volume=0.025',file],dir);j.audio[1]={file,duration:8,text:'Prueba de render local. Este video no utiliza voces ni créditos de ElevenLabs.'};j.videos[1]=await renderEpisode(j,profile,1,j.root,{width:720,height:1280});j.status='ready';j.progress=100;record(j,'MP4 de prueba de 8 segundos generado y verificado. Audio: tono de prueba. No hubo llamadas a IA.');}catch(e){j.status='failed';j.error=e.message;record(j,j.error);}finally{active.delete(j.id);store.saveJob(j);}})();return j;
@@ -181,9 +183,25 @@ const server=http.createServer(async(req,res)=>{try{
         void reexportSaved(store,job,profile).catch(error=>console.error('No se pudo guardar la reexportación:',error.message)).finally(()=>active.delete(job.id));
       }finally{admitting=false;}
     }
+    else if(url.pathname==='/api/retry-visual-plan'){
+      if(admitting||active.size||queue.pending.length)throw new Error('Espera a que termine el trabajo activo antes de corregir el plan.');
+      admitting=true;try{
+        const j=store.getJob(data.id),n=j.visualReview?.episode;
+        if(j.style!=='2d'||!n||!j.audio[n]||!['paused','failed'].includes(j.status))throw new Error('No hay un plan visual detenido para corregir.');
+        if(store.interruptedCharges(j.id).length)throw new Error('Revisa la llamada de resultado incierto antes de solicitar otra corrección.');
+        const request=await buildCodeArtRequest(j,n);let exhausted=false;
+        try{nextVisualRecovery(store,j,n,request);}catch(error){if(error.code!=='CODE_ART_REVIEW_REQUIRED')throw error;exhausted=true;}
+        if(!exhausted)throw new Error('El plan puede continuar sin abrir otra corrección. Pulsa Producir.');
+        const cycle=(j.codeArtRepairCycles?.[n]||0)+1;
+        if(cycle>3)throw new Error('Ya se solicitaron tres correcciones adicionales. Revisa las piezas y el guion antes de consumir más texto.');
+        j.codeArtRepairCycles={...j.codeArtRepairCycles,[n]:cycle};await checkCodeArtBudget(store,j,n);
+        j.visualReview=null;j.error=null;j.status='paused';if(j.previews)delete j.previews[n];if(j.visualApprovals)delete j.visualApprovals[n];
+        record(j,'Nueva corrección visual preparada. Se conserva la voz; pulsa Producir para solicitarla. Consume tokens de texto.');
+      }finally{admitting=false;}
+    }
     else if(url.pathname==='/api/run'){
       if(admitting)throw new Error('Se está guardando otra solicitud. Intenta de nuevo en un momento.');if([...active].some(id=>store.getJob(id).renderOnly))throw new Error('Espera a que termine la reexportación antes de iniciar otra producción.');admitting=true;
-      try{const j=store.getJob(data.id);if(j.status==='ready')throw new Error('Este trabajo ya terminó.');if(active.has(j.id)||queue.current===j.id||queue.pending.includes(j.id))throw new Error('Este trabajo ya está en producción o en cola.');try{await preflight(j);}catch(error){if(error.code==='TEXT_BUDGET_EXCEEDED'){j.status='paused';j.error=error.message;j.budgetBlock=error.budget;record(j,error.message);}throw error;}
+      try{const j=store.getJob(data.id);if(j.status==='ready')throw new Error('Este trabajo ya terminó.');if(active.has(j.id)||queue.current===j.id||queue.pending.includes(j.id))throw new Error('Este trabajo ya está en producción o en cola.');try{await preflight(j);}catch(error){if(['TEXT_BUDGET_EXCEEDED','CODE_ART_REVIEW_REQUIRED'].includes(error.code)){j.status='paused';j.error=error.message;j.budgetBlock=error.budget||null;j.visualReview=error.visualReview||null;record(j,error.message);}throw error;}
         if(needsReviewRecovery(j)){reopenReview(j);j.events.unshift({at:new Date().toISOString(),message:'Nueva ronda de recuperación iniciada con las observaciones pendientes. Se conservan ficha, plan y guiones.'});}
         j.error=null;j.budgetBlock=null;j.status='queued';pauses.delete(j.id);record(j,'Añadida a la cola de producción.');queue.enqueue(j.id);
       }finally{admitting=false;}
