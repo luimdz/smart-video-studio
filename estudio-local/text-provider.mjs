@@ -1,3 +1,4 @@
+import {textReservation} from './text-budget.mjs';
 import {requestGeneration} from './gemini-http.mjs';
 
 export function strictSchema(value) {
@@ -21,7 +22,7 @@ export async function requestText(store,job,baseId,{system,prompt,schema,maxOutp
     const requestId=provider==='gemini'?baseId:`${baseId}:openai:${model}`;
     // A different provider must not bypass an uncertain, potentially paid request.
     if(store.interruptedCharges(job.id).length)throw new Error('Hay una llamada de resultado incierto. Revisa el proveedor antes de continuar.');
-    const reserve=Buffer.byteLength(system+prompt+JSON.stringify(schema))+maxOutputTokens+images.length*4096;
+    const reservation=textReservation({system,prompt,schema:provider==='openai'?strictSchema(schema):schema,maxOutputTokens,images},provider),reserve=reservation.required;
     const request=()=> provider==='gemini'
       ? fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,{method:'POST',headers:{'Content-Type':'application/json','x-goog-api-key':key},body:JSON.stringify({systemInstruction:{parts:[{text:system}]},contents:[{role:'user',parts:[{text:prompt},...images.map(data=>({inlineData:{mimeType:'image/jpeg',data}}))]}],generationConfig:{responseMimeType:'application/json',responseJsonSchema:schema,maxOutputTokens,temperature:0.7}}),signal:AbortSignal.timeout(90000),redirect:'error'})
       : fetch('https://api.openai.com/v1/responses',{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${key}`},body:JSON.stringify({model,store:false,instructions:system,input:[{role:'user',content:[{type:'input_text',text:prompt},...images.map(data=>({type:'input_image',image_url:`data:image/jpeg;base64,${data}`}))]}],text:{format:{type:'json_schema',name:'studio_generation',strict:true,schema:strictSchema(schema)}},max_output_tokens:maxOutputTokens}),signal:AbortSignal.timeout(120000),redirect:'error'});
@@ -35,7 +36,7 @@ export async function requestText(store,job,baseId,{system,prompt,schema,maxOutp
     body._provider=provider;body._model=model;
     // Save receipt before validation, so a refusal or malformed JSON is never billed again silently.
     store.saveGenerationResponse(baseId,body);
-    store.recordConsumption(charge,job.id,{provider:provider==='gemini'?'gemini':'openai-text',model,step:baseId.split(':text:')[1],usage:usage||null});
+    store.recordConsumption(charge,job.id,{provider:provider==='gemini'?'gemini':'openai-text',model,step:baseId.split(':text:')[1],reservation,usage:usage||null});
     store.settle(charge,provider==='gemini'?usage?.totalTokenCount:usage?.total_tokens);
     return body;
   }

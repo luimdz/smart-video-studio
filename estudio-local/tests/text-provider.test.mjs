@@ -37,7 +37,7 @@ test('OpenAI recibe las referencias como imágenes y respeta el presupuesto com�
  const {store,job}=fixture(t);store.saveSettings({textProvider:'openai'});const original=global.fetch;t.after(()=>global.fetch=original);let calls=0;
  global.fetch=async(url,opts)=>{calls++;const b=JSON.parse(opts.body);assert.deepEqual(b.input[0].content[1],{type:'input_image',image_url:'data:image/jpeg;base64,AAAA'});return answer();};
  await requestText(store,job,job.id+':text:vision',{...args,images:['AAAA']});assert.equal(calls,1);
- store.saveSettings({monthlyTextTokens:20});await assert.rejects(requestText(store,job,job.id+':text:over-budget',args),/Límite local/);assert.equal(calls,1);
+ store.saveSettings({monthlyTextTokens:20});await assert.rejects(requestText(store,job,job.id+':text:over-budget',args),/Presupuesto local de texto/);assert.equal(calls,1);
 });
 test('el esquema estricto conserva referencias y exige las propiedades anidadas',()=>{
  const schema=strictSchema({type:'object',properties:{nested:{type:'object',properties:{label:{type:'string',default:''}}}},required:[]});assert.deepEqual(schema.required,['nested']);assert.deepEqual(schema.properties.nested.required,['label']);assert.equal(schema.properties.nested.additionalProperties,false);assert.equal(schema.properties.nested.properties.label.default,undefined);
