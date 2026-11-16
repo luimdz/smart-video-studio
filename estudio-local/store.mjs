@@ -1,3 +1,4 @@
+import {textBudgetError} from './text-budget.mjs';
 import { DatabaseSync } from 'node:sqlite';
 import { mkdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { randomBytes, createCipheriv, createDecipheriv, randomUUID } from 'node:crypto';
@@ -53,6 +54,12 @@ export function createStore(root) {
   const saveJob=job=>{job.updatedAt=new Date().toISOString();db.prepare('UPDATE jobs SET data=? WHERE id=?').run(JSON.stringify(job),job.id);return job;};
   const getJob=id=>{const row=db.prepare('SELECT data FROM jobs WHERE id=?').get(id);if(!row)throw new Error('Producción no encontrada.');return JSON.parse(row.data);};
   function settings(){const r=db.prepare("SELECT data FROM settings WHERE id='public'").get();return r?JSON.parse(r.data):{storageRoot:'',voiceModel:'eleven_flash_v2_5',geminiModel:'gemini-3.1-flash-lite',monthlyCredits:30000,n8nUrl:''};}
+  function textBudget(required=0,limit=settings().monthlyTextTokens??500000){
+    const rows=db.prepare("SELECT status,COALESCE(sum(amount),0) AS amount FROM charges WHERE period=? AND kind='text' GROUP BY status").all(period());
+    const accounted=rows.find(r=>r.status==='settled')?.amount||0,reserved=rows.find(r=>r.status==='reserved')?.amount||0,used=rows.reduce((n,r)=>n+r.amount,0),available=Math.max(0,limit-used);
+    return {limit,accounted,reserved,used,available,required,shortfall:Math.max(0,required-available)};
+  }
+  function assertTextBudget(required,limit){const budget=textBudget(required,limit);if(budget.shortfall)throw textBudgetError(budget);return budget;}
   function secrets(){const r=db.prepare("SELECT data FROM settings WHERE id='secrets'").get();if(!r)return {};const d=JSON.parse(r.data);const cipher=createDecipheriv('aes-256-gcm',key,Buffer.from(d.iv,'base64'));cipher.setAuthTag(Buffer.from(d.tag,'base64'));return JSON.parse(Buffer.concat([cipher.update(Buffer.from(d.value,'base64')),cipher.final()]).toString());}
   function saveSettings(config, incoming={}){
     const secretValues={...secrets()};for(const [k,v] of Object.entries(incoming))if(['geminiKey','elevenKey','n8nToken','openaiKey'].includes(k)&&typeof v==='string'&&v.trim())secretValues[k]=v.trim();
@@ -60,7 +67,7 @@ export function createStore(root) {
     db.prepare("INSERT OR REPLACE INTO settings VALUES('public',?)").run(JSON.stringify({...settings(),...config}));
     db.prepare("INSERT OR REPLACE INTO settings VALUES('secrets',?)").run(JSON.stringify({iv:iv.toString('base64'),tag:cipher.getAuthTag().toString('base64'),value:value.toString('base64')}));
   }
-  return {db,list,settings,secrets,saveSettings,getJob,saveJob,
+  return {db,list,settings,secrets,saveSettings,getJob,saveJob,textBudget,assertTextBudget,
     listMusic(){return db.prepare('SELECT id,data FROM media').all().map(row=>({id:row.id,...JSON.parse(row.data)})).filter(m=>m.kind==='music').map(({id,name,duration})=>({id,name,duration}));},
     addMedia(data){const id=randomUUID();db.prepare('INSERT INTO media VALUES(?,?)').run(id,JSON.stringify(data));return id;},
     assignVoice(id,voiceId,voiceName=''){const p=list('profiles').find(p=>p.id===id);if(!p)throw new Error('Perfil no encontrado.');p.voiceId=z.string().regex(/^[a-zA-Z0-9_-]{1,100}$/).parse(voiceId);p.voiceName=z.string().max(500).parse(voiceName);db.prepare('UPDATE profiles SET data=? WHERE id=?').run(JSON.stringify(p),p.id);return p;},
@@ -78,6 +85,7 @@ export function createStore(root) {
         if(db.prepare('SELECT id FROM charges WHERE id=?').get(chargeId))throw new Error('Esta llamada ya está registrada; no se volverá a ejecutar automáticamente.');
         const total=db.prepare('SELECT COALESCE(sum(amount),0) AS n FROM charges WHERE period=? AND kind=?').get(p,kind).n;
         if(kind==='image')throw new Error(total+amount>limit?'Se alcanzó el límite mensual de imágenes. Revisa Configuración.':'Se alcanzó el límite de imágenes de esta producción.');
+        if(kind==='text'&&total+amount>limit)assertTextBudget(amount,limit);
         if(total+amount>limit)throw new Error(`Límite local de ${kind==='text'?'Gemini':'ElevenLabs'}: ${total.toLocaleString('es')} de ${limit.toLocaleString('es')} ${kind==='text'?'tokens':'créditos'} contabilizados o reservados. La siguiente etapa necesita reservar ${amount.toLocaleString('es')}. Revisa Consumo y costos y el límite en Configuración.`);
         throw new Error('Se alcanzó el límite de créditos de esta producción. Revisa su presupuesto de voz.');
       }db.prepare('INSERT OR IGNORE INTO charge_estimates VALUES(?,?)').run(chargeId,amount);return chargeId;
@@ -87,7 +95,7 @@ export function createStore(root) {
     generationCharge(id){const rows=db.prepare('SELECT id,status FROM charges WHERE id=? OR substr(id,1,?)=?').all(id,(id+':attempt:').length,id+':attempt:');if(rows.some(r=>r.status==='reserved'))throw new Error('Esta etapa tiene una llamada de resultado incierto. Revisa el proveedor antes de repetir.');return rows.length?id+':attempt:'+String(rows.length+1):id;},
     recordConsumption(id,jobId,data){db.prepare('INSERT OR IGNORE INTO consumption VALUES(?,?,?,?)').run(id,jobId,period(),JSON.stringify({...data,at:new Date().toISOString()}));},
     consumption(){return db.prepare('SELECT id,job_id,period,data FROM consumption').all().map(r=>({id:r.id,jobId:r.job_id,period:r.period,...JSON.parse(r.data)}));},
-    accounting(){return {period:period(),records:this.consumption(),reservations:db.prepare("SELECT job_id AS jobId,kind,status,sum(amount) AS amount FROM charges WHERE period=? GROUP BY job_id,kind,status").all(period()),pricing:settings().pricing||{},subscription:settings().elevenSubscription||null};},
+    accounting(){return {period:period(),textBudget:textBudget(),records:this.consumption(),reservations:db.prepare("SELECT job_id AS jobId,kind,status,sum(amount) AS amount FROM charges WHERE period=? GROUP BY job_id,kind,status").all(period()),pricing:settings().pricing||{},subscription:settings().elevenSubscription||null};},
     settle(id,actual){if(Number.isFinite(actual)&&actual>=0){db.prepare("UPDATE charges SET amount=?,status='settled' WHERE id=?").run(Math.ceil(actual),id);}else db.prepare("UPDATE charges SET status='settled' WHERE id=?").run(id);},
     rejectGeneration(id,status,details=null){const row=db.prepare("SELECT amount FROM charges WHERE id=? AND kind='text' AND status='reserved'").get(id);if(!row)return;db.exec('BEGIN IMMEDIATE');try{db.prepare('INSERT OR REPLACE INTO generation_failures VALUES(?,?,?,?)').run(id,status,row.amount,new Date().toISOString());if(details)db.prepare('INSERT OR REPLACE INTO generation_error_details VALUES(?,?)').run(id,JSON.stringify(details));db.prepare("UPDATE charges SET amount=0,status='rejected' WHERE id=? AND status='reserved'").run(id);db.exec('COMMIT');}catch(error){db.exec('ROLLBACK');throw error;}},
     releaseRejected(id){db.prepare("DELETE FROM charges WHERE id=? AND status='reserved'").run(id);},

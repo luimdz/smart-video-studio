@@ -13,5 +13,5 @@ export async function ensureCodeArt(){
  }
  throw new Error('No se encontró CODE ART. El modo 2D requiere su carpeta de recursos; no se usará la plantilla de prueba.');
 }
-export async function codeArtGuidance(){await ensureCodeArt();return readGuides(['guia/dibujar.md','guia/sonido.md','packs/estilos.md','aprendido.md','piezas/LEEME.md','plantillas.md']);}
+export async function codeArtGuidance(){await ensureCodeArt();const names=['guia/dibujar.md','guia/sonido.md','packs/estilos.md','aprendido.md','piezas/LEEME.md','plantillas.md'];return (await Promise.all(names.map(name=>readGuides([name],codeArtRoot,700)))).join('\n\n');}
 export const codeArtUrl=relative=>pathToFileURL(path.join(codeArtRoot,relative)).href;
