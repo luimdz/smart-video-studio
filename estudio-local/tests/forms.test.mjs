@@ -34,3 +34,21 @@ test('un video terminado ofrece reexportación con metadatos de audio sin rutas 
  vm.runInContext(source,ctx);vm.runInContext('state={jobs:[fixture]};',ctx);await vm.runInContext('detail(fixture.id)',ctx);
  assert.ok(body.innerHTML.includes('Ajustar montaje y reexportar'));assert.ok(body.innerHTML.includes('data-montage="ready-job"'));
 });
+
+test('seleccionar perfil editorial no busca campos de video y renueva su solicitud',async()=>{
+ const source=(await readFile(new URL('../public/app.js',import.meta.url),'utf8')).replace(/^await load\(\);poll=.*$/m,'');
+ let change,counter=0;const messages=[],key={value:'old-request'},form={elements:{namedItem:name=>name==='requestKey'?key:null}},element={addEventListener(){}};
+ const ctx=vm.createContext({console,Intl,messages,crypto:{randomUUID:()=> 'request-'+(++counter)},document:{querySelector:s=>{if(['#content','#modal','#refresh'].includes(s))return element;throw Error('Campo de video consultado desde Ideas: '+s);},addEventListener:(name,fn)=>{if(name==='change')change=fn;}},fetch:()=>{throw Error('Seleccionar un perfil no debe llamar a proveedores');}});
+ vm.runInContext(source,ctx);vm.runInContext("state={profiles:[{id:'a',defaultStaticDesign:'romantic-note',defaultContentFormat:'poetry'},{id:'b'}]};message=(text,error)=>messages.push({text,error});",ctx);
+ const target={name:'profileId',value:'a',dataset:{},closest:selector=>selector==='#editorial-form'?form:null};await change({target});
+ assert.deepEqual(messages,[]);assert.notEqual(key.value,'old-request');const first=key.value;target.value='b';await change({target});assert.notEqual(key.value,first);assert.deepEqual(messages,[]);
+});
+
+test('seleccionar perfil en Crear contenido conserva sus preferencias visuales',async()=>{
+ const source=(await readFile(new URL('../public/app.js',import.meta.url),'utf8')).replace(/^await load\(\);poll=.*$/m,'');let change;
+ const fields={'select[name=staticDesign]':{value:''},'#content-format':{value:'standard'},'#visual-style':{value:'motion'}},element={addEventListener(){}},messages=[];
+ const ctx=vm.createContext({console,Intl,messages,updates:0,crypto:{randomUUID:()=> 'request'},document:{querySelector:s=>fields[s]||element,addEventListener:(name,fn)=>{if(name==='change')change=fn;}}});
+ vm.runInContext(source,ctx);vm.runInContext("state={profiles:[{id:'a',defaultStaticDesign:'romantic-note',defaultContentFormat:'poetry'}]};message=text=>messages.push(text);updateContentOptions=()=>updates++;",ctx);
+ await change({target:{name:'profileId',value:'a',dataset:{},closest:selector=>selector==='#create-form'?{}:null}});
+ assert.equal(fields['select[name=staticDesign]'].value,'romantic-note');assert.equal(fields['#content-format'].value,'poetry');assert.equal(fields['#visual-style'].value,'static');assert.equal(vm.runInContext('updates',ctx),1);assert.deepEqual(messages,[]);
+});
