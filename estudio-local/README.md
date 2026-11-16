@@ -75,3 +75,11 @@ El importador de Configuración permite seleccionar la carpeta original CODE ART
 ### Comprobación anticipada del presupuesto 2D
 
 El plan 2D utiliza guías y contexto compactos y dimensiona la salida por cantidad de planos. El presupuesto se comprueba antes de consumir una voz nueva y antes de reanudar el render. Si no alcanza, se pausa con el desglose y un acceso a Configuración, conservando los medios. Los límites no se elevan ni se reinicia el consumo. Ver [presupuesto y reanudación](../docs/PRESUPUESTO_TEXTO.md).
+
+### Recuperar un plan 2D con formato inválido
+
+El esquema de los planes visuales exige en la API listas de objetos no vacías y el número de planos esperado. La validación local sigue comprobando catálogo, coordenadas, tiempos y correspondencia con la narración.
+
+Una respuesta inválida ya guardada entra en una corrección acotada del plan. Esto incluye errores de formato como `shots.3.objects`, JSON incompleto y errores de validación visual; no se vuelve a pedir el original ni se genera otra voz. La comprobación de presupuesto estima la corrección pendiente en vez de fallar al leer el recibo original.
+
+Si también falla la corrección, el trabajo queda pausado con **Preparar otra corrección del plan · consume texto**. Prepararla no llama al proveedor: Producir solicita esa nueva corrección usando otro identificador de caché, conservando los recibos anteriores. Se admiten hasta tres ciclos adicionales solicitados expresamente. Una llamada incierta o un presupuesto insuficiente sigue bloqueando la petición. No se inventan objetos, no se omiten validaciones ni se renderiza un plan rechazado.

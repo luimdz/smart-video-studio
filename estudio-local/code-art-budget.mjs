@@ -1,7 +1,7 @@
+import {nextVisualRecovery} from './code-art-recovery.mjs';
 import {buildCodeArtRequest} from './code-art-plan-request.mjs';
-import {codeArtKinds,codeArtGenerationSchema,validateShotSubjects,validateCodeArtPlan,alignedWords} from './code-art-scene.mjs';
+import {codeArtKinds,codeArtGenerationSchema,validateCodeArtPlan,alignedWords} from './code-art-scene.mjs';
 import {generationPrompt,generationSystem} from './generation-context.mjs';
-import {parseGeneration} from './generation-response.mjs';
 import {generationSchema} from './gemini-schema.mjs';
 import {strictSchema} from './text-provider.mjs';
 import {textReservation} from './text-budget.mjs';
@@ -16,18 +16,13 @@ export async function codeArtBudget(store,job,number,options={}){
  }
  const words=alignedWords(audio);
  if(job.codeArtPlans?.[number]&&job.codeArtPlanVersions?.[number]==='semantic-v6'){
-  codeArtGenerationSchema(codeArtKinds(script)).parse({...job.codeArtPlans[number],unsupported:[]});validateCodeArtPlan(job.codeArtPlans[number],words,audio.duration);
-  return {required:0,approximate,episode:number,cached:true};
+  try{codeArtGenerationSchema(codeArtKinds(script)).parse({...job.codeArtPlans[number],unsupported:[]});validateCodeArtPlan(job.codeArtPlans[number],words,audio.duration);return {required:0,approximate,episode:number,cached:true};}catch{/* Estimate the recovery request instead of getting stuck on the saved schema. */}
  }
  const request=await buildCodeArtRequest({...job,audio:{...job.audio,[number]:audio}},number,options);
- const base=`${job.id}:text:code-art:${number}:v6`,cached=store.generationResponse(base);let prompt=request.prompt;
- if(cached){
-  const plan=parseGeneration(cached,request.schema,'code-art');let error;
-  try{if(plan.unsupported.length)throw Error('CODE ART necesita piezas para: '+plan.unsupported.join('; '));if(plan.shots.length!==request.windows.length||plan.shots.some((shot,i)=>shot.startWord!==request.windows[i].startWord))throw Error('El plan no respetó las ventanas de narración.');validateShotSubjects(plan,request.windows);validateCodeArtPlan(plan,request.words,audio.duration);}catch(e){error=e;}
-  if(!error||store.generationResponse(base+':repair1'))return {required:0,approximate,episode:number,cached:true};
-  prompt+=' Corrige este plan sin inventar objetos ni cambiar la narración. Error: '+error.message+'. Plan: '+JSON.stringify(plan);
- }
- const schema=generationSchema(z.toJSONSchema(request.schema)),provider=store.settings().textProvider||'gemini';
+ const next=nextVisualRecovery(store,{...job,audio:{...job.audio,[number]:audio}},number,request);
+ if(next.plan)return {required:0,approximate,episode:number,cached:true};
+ const prompt=next.prompt;
+ const schema=generationSchema(z.toJSONSchema(request.schema),{arrayBounds:true}),provider=store.settings().textProvider||'gemini';
  return {...textReservation({system:generationSystem,prompt:generationPrompt(prompt),schema:provider==='openai'?strictSchema(schema):schema,maxOutputTokens:request.maxOutputTokens,images:[]},provider),approximate,episode:number,cached:false};
 }
 export async function checkCodeArtBudget(store,job,number,options={}){

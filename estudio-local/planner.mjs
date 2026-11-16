@@ -1,3 +1,4 @@
+import {nextVisualRecovery,inspectVisualResponse,visualReviewRequired} from './code-art-recovery.mjs';
 import {checkCodeArtBudget} from './code-art-budget.mjs';
 import {parseGeneration} from './generation-response.mjs';
 export {parseGeneration} from './generation-response.mjs';
@@ -6,7 +7,7 @@ import {buildCodeArtRequest} from './code-art-plan-request.mjs';
 import {readGuides} from './code-art-pack.mjs';
 import {access} from 'node:fs/promises';
 import {codeArtRoot} from './code-art-resources.mjs';
-import {alignedWords,validateCodeArtPlan,codeArtKinds,codeArtGenerationSchema,validateShotSubjects} from './code-art-scene.mjs';
+import {alignedWords,validateCodeArtPlan,codeArtKinds,codeArtGenerationSchema} from './code-art-scene.mjs';
 import {processFile} from './render.mjs';
 import {usesExactText,narrationText,assertCreativeNarration,isPoster} from './content.mjs';
 import {generationSchema} from './gemini-schema.mjs';
@@ -27,7 +28,7 @@ function references(s,j,n){const ids=new Set(j.bible.characters.map(c=>c.id)),pl
 export async function generate(store,j,prompt,schema,step,maxOutputTokens=8000,visionFiles=null){
  const baseId=`${j.id}:text:${step}`,cached=store.generationResponse(baseId);
  if(cached)return parseGeneration(cached,schema,step);
- const responseJsonSchema=generationSchema(z.toJSONSchema(schema));
+ const responseJsonSchema=generationSchema(z.toJSONSchema(schema),{arrayBounds:step.startsWith('code-art:')});
  const images=await Promise.all((visionFiles||j.referenceImages||[]).map(async ref=>(await sharp(await readFile(ref.file),{limitInputPixels:40000000}).rotate().resize({width:1024,height:1024,fit:'inside',withoutEnlargement:true}).flatten({background:'#fff'}).jpeg({quality:75}).toBuffer()).toString('base64')));
  const body=await requestText(store,j,baseId,{system,prompt:generationPrompt(prompt),schema:responseJsonSchema,maxOutputTokens,images});
  return parseGeneration(body,schema,step);
@@ -90,11 +91,21 @@ export async function voiceStep(store,j,root,budgetOptions={}){
 }
 
 export async function codeArtPlanningStep(store,j,number,options={}){
- const words=alignedWords(j.audio[number]);if(j.codeArtPlans?.[number]&&j.codeArtPlanVersions?.[number]==='semantic-v6'){codeArtGenerationSchema(codeArtKinds(j.scripts[number-1])).parse({...j.codeArtPlans[number],unsupported:[]});validateCodeArtPlan(j.codeArtPlans[number],words,j.audio[number].duration);return j;}
- const {prompt,schema,windows,guideHash,maxOutputTokens}=await buildCodeArtRequest(j,number,options);
- let plan=await generate(store,j,prompt,schema,`code-art:${number}:v6`,maxOutputTokens,[]);
- const check=p=>{if(p.unsupported.length)throw new Error('CODE ART necesita piezas para: '+p.unsupported.join('; '));if(p.shots.length!==windows.length||p.shots.some((shot,i)=>shot.startWord!==windows[i].startWord))throw new Error('El plan no respetó las ventanas de narración.');validateShotSubjects(p,windows);validateCodeArtPlan(p,words,j.audio[number].duration);};
- try{check(plan);}catch(error){plan=await generate(store,j,prompt+' Corrige este plan sin inventar objetos ni cambiar la narración. Error: '+error.message+'. Plan: '+JSON.stringify(plan),schema,`code-art:${number}:v6:repair1`,maxOutputTokens,[]);check(plan);}
- j.codeArtGuideHash=guideHash;
- validateShotSubjects(plan,windows);validateCodeArtPlan(plan,words,j.audio[number].duration);j.codeArtPlans||={};j.codeArtPlans[number]=plan;j.codeArtPlanVersions||={};j.codeArtPlanVersions[number]='semantic-v6';store.saveJob(j);return j;
+ const words=alignedWords(j.audio[number]);if(j.codeArtPlans?.[number]&&j.codeArtPlanVersions?.[number]==='semantic-v6'){try{codeArtGenerationSchema(codeArtKinds(j.scripts[number-1])).parse({...j.codeArtPlans[number],unsupported:[]});validateCodeArtPlan(j.codeArtPlans[number],words,j.audio[number].duration);j.visualReview=null;return j;}catch{/* Recover from the original receipt; do not render an invalid saved plan. */}}
+ const request=await buildCodeArtRequest(j,number,options),{schema,guideHash,maxOutputTokens}=request;
+ let next=nextVisualRecovery(store,j,number,request),plan=next.plan;
+ // One primary request and at most one repair per cycle; raw receipts remain immutable in cache.
+ for(let attempt=0;!plan&&attempt<2;attempt++){
+  try{plan=await generate(store,j,next.prompt,schema,next.stage,maxOutputTokens,[]);}catch(error){
+   if(!['GENERATION_SCHEMA_INVALID','GENERATION_JSON_INVALID','GENERATION_INCOMPLETE'].includes(error.code)||store.interruptedCharges(j.id).length||!store.generationResponse(`${j.id}:text:${next.stage}`))throw error;
+  }
+  const body=store.generationResponse(`${j.id}:text:${next.stage}`),checked=body&&inspectVisualResponse(body,request,j.audio[number].duration);
+  if(checked?.plan){plan=checked.plan;break;}plan=null;
+  if(next.repair)throw visualReviewRequired(number,checked?.error||Error('No se recibió un plan válido.'));
+  next=nextVisualRecovery(store,j,number,request);plan=next.plan;
+ }
+ if(!plan)throw visualReviewRequired(number,Error('No se obtuvo un plan válido.'));
+
+ j.visualReview=null;j.codeArtGuideHash=guideHash;
+ j.codeArtPlans||={};j.codeArtPlans[number]=plan;j.codeArtPlanVersions||={};j.codeArtPlanVersions[number]='semantic-v6';store.saveJob(j);return j;
 }
