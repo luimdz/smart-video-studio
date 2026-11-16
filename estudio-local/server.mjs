@@ -1,3 +1,4 @@
+import {prepareReexport,reexportSaved} from './reexport.mjs';
 import {prepareImages,needsImageGeneration} from './image-planner.mjs';
 import {createProductionQueue} from './production-queue.mjs';
 import {needsReviewRecovery,reopenReview,editScriptText} from './recovery.mjs';
@@ -119,8 +120,18 @@ const server=http.createServer(async(req,res)=>{try{
       json(res,200,{id:store.addMedia({kind,file})});return;
     }
     else if(url.pathname==='/api/assets'){const p=store.list('profiles').find(p=>p.id===data.profileId);if(!p)throw new Error('Perfil no encontrado.');if((p.assets||[]).length>=30)throw new Error('Este perfil ya tiene 30 imágenes.');const image=z.string().max(24000000).parse(data.image),match=/^data:image\/(png|jpeg|webp);base64,([A-Za-z0-9+/=\r\n]+)$/.exec(image);if(!match)throw new Error('Usa una imagen PNG, JPG o WebP.');const root=await requireStorage(p.assetsRoot||store.settings().storageRoot),folder=path.join(root,'assets');await mkdir(folder,{recursive:true});const buffer=Buffer.from(match[2],'base64'),decoder=sharp(buffer,{limitInputPixels:40000000}),metadata=await decoder.metadata();if(!['png','jpeg','webp'].includes(metadata.format))throw new Error('El archivo no es una imagen PNG, JPG o WebP válida.');const name=randomUUID()+'.png';await decoder.resize({width:1920,height:1920,fit:'inside',withoutEnlargement:true}).png().toFile(path.join(folder,name));p.assets=[...(p.assets||[]),name];p.assetsRoot=root;store.db.prepare('UPDATE profiles SET data=? WHERE id=?').run(JSON.stringify(p),p.id);}
+    else if(url.pathname==='/api/reexport'){
+      if(admitting||active.size||queue.current||queue.pending.length)throw new Error('Espera a que termine la cola antes de reexportar.');
+      admitting=true;
+      try{
+        const job=await prepareReexport(store,store.getJob(data.id),data),profile=store.list('profiles').find(p=>p.id===job.profileId);
+        if(!profile)throw new Error('No se encontró el perfil de esta producción.');
+        active.add(job.id);
+        void reexportSaved(store,job,profile).catch(error=>console.error('No se pudo guardar la reexportación:',error.message)).finally(()=>active.delete(job.id));
+      }finally{admitting=false;}
+    }
     else if(url.pathname==='/api/run'){
-      if(admitting)throw new Error('Se está guardando otra solicitud. Intenta de nuevo en un momento.');admitting=true;
+      if(admitting)throw new Error('Se está guardando otra solicitud. Intenta de nuevo en un momento.');if([...active].some(id=>store.getJob(id).renderOnly))throw new Error('Espera a que termine la reexportación antes de iniciar otra producción.');admitting=true;
       try{const j=store.getJob(data.id);if(j.status==='ready')throw new Error('Este trabajo ya terminó.');if(active.has(j.id)||queue.current===j.id||queue.pending.includes(j.id))throw new Error('Este trabajo ya está en producción o en cola.');await preflight(j);
         if(needsReviewRecovery(j)){reopenReview(j);j.events.unshift({at:new Date().toISOString(),message:'Nueva ronda de recuperación iniciada con las observaciones pendientes. Se conservan ficha, plan y guiones.'});}
         j.error=null;j.status='queued';pauses.delete(j.id);record(j,'Añadida a la cola de producción.');queue.enqueue(j.id);
@@ -128,6 +139,7 @@ const server=http.createServer(async(req,res)=>{try{
     }
     else if(url.pathname==='/api/pause'){
       const j=store.getJob(data.id);if(j.status==='ready')throw new Error('Este trabajo ya terminó.');
+      if(j.renderOnly&&active.has(j.id))throw new Error('Espera a que termine la reexportación del montaje.');
       if(active.has(j.id)){pauses.add(j.id);record({...j},'Pausa solicitada; se aplicará al terminar la etapa en curso.');}
       else{queue.remove(j.id);pauses.delete(j.id);j.status='paused';record(j,'Pausada. Los avances se conservan y no bloquea las demás producciones.');}
     }

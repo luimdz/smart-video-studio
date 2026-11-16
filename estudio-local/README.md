@@ -53,3 +53,15 @@ La UI actualiza el estado del diálogo y sus controles durante la producción. U
 La UI ofrece Baja (`low`), Media y Alta para GPT Image 2, también al cambiar el generador de un trabajo detenido. Las producciones nuevas usan Baja por defecto. El proveedor recibe la calidad elegida sin aumentarla durante una corrección o reintento; el caché distingue las tres calidades. Se conserva la resolución de generación existente, 1152×2048, y la exportación final 1080×1920. En Nano Banana, baja/media corresponden a 1K y alta a 2K. Una imagen con mucho texto puede requerir más calidad para pasar la comprobación de lectura.
 
 Los importes publicados son USD decimales: US$0.053 equivale a 5.3 centavos, no a 53. El costo final incluye entrada, referencias y salida, y una corrección solicitada al modelo cuenta como otra llamada.
+
+## Montaje con imágenes, voz, subtítulos y música
+
+En Crear contenido, **Escenas con imágenes y subtítulos** conserva las imágenes sin desplazamiento por defecto. El bloque **Montaje** permite activar un acercamiento centrado de 2,5 % por escena; ya no se aplica la oscilación lateral. El acercamiento mantiene su avance al cambiar de subtítulo. La imagen fija conserva siempre su encuadre.
+
+Los subtítulos se agrupan en bloques breves de hasta dos líneas, conservando las palabras de la narración. Utilizan los tiempos de la voz cuando existen; el respaldo sin alineación reparte el texto según su longitud y no equivale a una alineación real. Las láminas con texto mantienen su composición sin subtítulos adicionales.
+
+La música MP3/WAV también se puede usar con la narración por escenas. Se repite o recorta a la duración, baja de nivel bajo la voz y termina con un desvanecimiento. La pista se selecciona o carga; no se genera música automáticamente. El modo 2D mantiene su mezclador propio y no admite este ajuste de música.
+
+Para mejorar un video existente, abrir su detalle y elegir **Ajustar montaje y reexportar**. Requiere todos los guiones, audios y recursos de imagen disponibles en el disco. Permite cambiar cámara, subtítulos y música sin llamadas a Gemini, OpenAI, ElevenLabs ni n8n. No cambia guiones ni genera nuevas imágenes. Sustituye el MP4 de cada capítulo solo después de verificar la nueva exportación; si falla un capítulo posterior, los anteriores pueden estar ya actualizados. Esta operación necesita el motor libre y no admite pausa durante el montaje.
+
+Los videos existentes mantienen su MP4 hasta reexportarlos. Esta mejora es un montaje de imágenes; no es generación de video con movimiento de personas u objetos.

@@ -44,3 +44,7 @@ GitHub almacena y versiona el código. Netlify/Vercel alojarían el panel. El Ma
 ## Comprobar el código
 
 Desde `estudio-local`: `npm test`. Consultar el [README técnico y sus limitaciones](estudio-local/README.md) antes de una ejecución pagada.
+
+### Mejora de montaje
+
+El estudio local incorpora imágenes sin desplazamiento por defecto, acercamiento suave opcional, subtítulos breves y música de fondo para videos narrados. Desde el detalle de una producción se puede ajustar el montaje y reexportar con los medios guardados, sin nuevas llamadas a proveedores. Consultar [Montaje](estudio-local/README.md#montaje-con-imágenes-voz-subtítulos-y-música).
