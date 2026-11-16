@@ -48,3 +48,7 @@ Desde `estudio-local`: `npm test`. Consultar el [README técnico y sus limitacio
 ### Mejora de montaje
 
 El estudio local incorpora imágenes sin desplazamiento por defecto, acercamiento suave opcional, subtítulos breves y música de fondo para videos narrados. Desde el detalle de una producción se puede ajustar el montaje y reexportar con los medios guardados, sin nuevas llamadas a proveedores. Consultar [Montaje](estudio-local/README.md#montaje-con-imágenes-voz-subtítulos-y-música).
+
+### Texto y CODE ART · v0.2
+
+La versión local permite texto con Gemini u OpenAI, respaldo ante saturación 503, importación del paquete CODE ART con 31 efectos, revisión del guion y borrador 2D, portadas y descripciones descargables, preferencias de marca e ideas/calendario/reutilización. Ver [activación y alcance real](docs/INTEGRACION_CODE_ART_Y_TEXTO.md). El código nuevo requiere actualizar la copia local; el paquete se importa desde Configuración.

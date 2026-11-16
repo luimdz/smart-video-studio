@@ -1,3 +1,4 @@
+import {readGuides} from './code-art-pack.mjs';
 import {access,cp,mkdir,readFile,readdir,writeFile} from 'node:fs/promises';
 import {homedir} from 'node:os';import path from 'node:path';import {fileURLToPath,pathToFileURL} from 'node:url';
 export const codeArtRoot=fileURLToPath(new URL('./resources/code-art/',import.meta.url));
@@ -12,5 +13,5 @@ export async function ensureCodeArt(){
  }
  throw new Error('No se encontró CODE ART. El modo 2D requiere su carpeta de recursos; no se usará la plantilla de prueba.');
 }
-export async function codeArtGuidance(){await ensureCodeArt();return (await Promise.all(['packs/estilos.md','guia/dibujar.md','guia/guion.md'].map(n=>readFile(path.join(codeArtRoot,n),'utf8')))).join('\n\n');}
+export async function codeArtGuidance(){await ensureCodeArt();return readGuides(['guia/dibujar.md','guia/sonido.md','packs/estilos.md','aprendido.md','piezas/LEEME.md','plantillas.md']);}
 export const codeArtUrl=relative=>pathToFileURL(path.join(codeArtRoot,relative)).href;

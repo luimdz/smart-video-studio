@@ -1,12 +1,24 @@
-// Sound follows a visible action, never a clock or a mandatory filler interval.
-export function codeArtSoundEvents(shots,words,limit){
- const events=[],last=new Map();const put=e=>{if(e.t<0||e.t>=limit||(last.get(e.sonido)??-99)>e.t-2.5)return;events.push(e);last.set(e.sonido,e.t);};
- for(const shot of shots){const travel=Math.hypot(...shot.cameraFrom.map((v,i)=>v-shot.cameraTo[i]));if(travel>4)put({sonido:'aire',t:shot.from+.15,ancla:'empieza',db:-17,vel:.7,corta:shot.to,que:'Desplazamiento amplio de cámara'});
-  for(const o of shot.objects){const t=words[o.actionWord].inicio;
-   if(o.action==='arrive'){const material={paper:'papel',ruler:'desliza',glass:'cristal',rock:'roca'};put({sonido:material[o.kind]||'aire',t:Math.max(shot.from+.1,t-.1),ancla:'empieza',db:-16,vel:1,corta:shot.to,que:'Entrada visible de '+o.id});}
-   if(o.action==='pulse'&&o.kind==='star')put({sonido:'late',t:t+.18,db:-17,corta:shot.to,que:'Latido de '+o.id});
-   if(o.action==='reveal')put({sonido:o.kind==='paper'?'papel':o.kind==='glass'?'cristal':'clic',t:t+.1,db:-17,corta:shot.to,que:'Aparición de '+o.id});
+// A sound belongs to a visible action, never to a cut or a periodic filler interval.
+export function codeArtSoundEvents(shots,words,limit,{enabled=true}={}){
+ if(!enabled)return [];
+ const candidates=[];
+ for(const shot of shots){
+  const put=e=>{if(e.t>=shot.from+.09&&e.t<Math.min(shot.to-.05,limit))candidates.push({...e,corta:Math.min(shot.to,limit)});};
+  const travel=Math.hypot(...shot.cameraFrom.map((v,i)=>v-shot.cameraTo[i]));
+  if(travel>4)put({sonido:'aire',t:shot.from+.15,ancla:'empieza',db:-17,vel:.7,que:'Desplazamiento amplio de cámara'});
+  for(const o of shot.objects){
+   const t=words[o.actionWord].inicio;
+   const material={paper:'papel',ruler:'desliza',glass:'cristal',rock:'roca',phone:'toque',button:'aprieta',screenshot:'aviso'};
+   const sound={arrive:material[o.kind]||'aire',reveal:material[o.kind]||'clic',press:o.kind==='button'?'aprieta':'toque',rise:'sube',fall:o.kind==='rock'?'roca':'golpe',impact:material[o.kind]||'golpe',burst:'estallido',grow:'empujon',shrink:'aprieta',pulse:o.kind==='star'?'late':'clic'}[o.action];
+   if(!sound)continue;
+   const offset=['press','impact','burst'].includes(o.action)?.4:.12;
+   put({sonido:o.sound||sound,t:Math.max(shot.from+.1,t+offset),ancla:['press','impact','burst'].includes(o.action)?'golpe':'empieza',db:['impact','burst'].includes(o.action)?-12:-17,vel:1,que:`${o.action}: ${o.id}`});
   }
  }
- return events.sort((a,b)=>a.t-b.t);
+ const events=[],last=new Map();
+ for(const e of candidates.sort((a,b)=>a.t-b.t)){
+  if((last.get(e.sonido)??-99)>e.t-.12)continue;
+  last.set(e.sonido,e.t);events.push(e);
+ }
+ return events;
 }

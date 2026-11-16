@@ -4,7 +4,7 @@ export function reopenReview(j,{correct=true}={}){
  if(Object.keys(j.audio||{}).length||Object.keys(j.videos||{}).length)throw Error('Este trabajo ya tiene voz o video. Conserva esta versión y crea otra para cambiar el guion.');
  const findings=j.reviewFindings?.length?j.reviewFindings:j.corrections||[];
  j.reviewHistory||=[];j.reviewHistory.push({cycle:j.reviewCycle||0,passes:j.reviewPass,findings:structuredClone(findings),at:new Date().toISOString()});
- j.reviewCycle=(j.reviewCycle||0)+1;j.reviewPass=0;j.reviewPassed=false;j.reviewFindings=[];j.corrections=correct?findings.filter(f=>f.episode<=j.scripts.length).map(f=>({...f})):[];j.error=null;
+ j.reviewCycle=(j.reviewCycle||0)+1;j.reviewPass=0;j.scriptApproved=false;j.awaitingApproval=null;j.reviewPassed=false;j.reviewFindings=[];j.corrections=correct?findings.filter(f=>f.episode<=j.scripts.length).map(f=>({...f})):[];j.error=null;
  return j;
 }
 export function editScriptText(j,episodes){

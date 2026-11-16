@@ -1,0 +1,441 @@
+{
+  "version": 1,
+  "files": {
+    "AGENTS.md": {
+      "sha256": "7fcf37a39cba73179636111e04b27ab090fcc3fab94551c4918d43530962921f",
+      "bytes": 14480
+    },
+    "CLAUDE.md": {
+      "sha256": "336cc4fbf19beaada7ccf9986414fa91851a8d7a07dfb3ccbe800a69eed0ab49",
+      "bytes": 11
+    },
+    "EMPIEZA-AQUI.html": {
+      "sha256": "d61a294577e8b7e2fa6d6b4010f59159e7f21be66a1b4ea147690b0233825490",
+      "bytes": 21986
+    },
+    "METODO.md": {
+      "sha256": "73ed8d17ee623dd7ddd6421948958eec3f5dc6f37703078f64e7cb261c08028b",
+      "bytes": 19609
+    },
+    "VERSION.md": {
+      "sha256": "87db590fda88fada6e94ea01b0e41e25a9d591ad1643a2ef4b2a89f05e7c75a1",
+      "bytes": 817
+    },
+    "aprendido.md": {
+      "sha256": "114be502325a49ada74574d0025c7b3f378230cea7ad1927e7b5a098cd0a9f92",
+      "bytes": 7206
+    },
+    "ejemplo/alcohol/guion.json": {
+      "sha256": "03dc8c56b38938907c1fad3a19e2a93d2694b9d8084e802c467b9e9b18f9a0cf",
+      "bytes": 1369
+    },
+    "ejemplo/alcohol/idea.md": {
+      "sha256": "d4304c2850c6d510da9a539fcbea8e87fe1c7a19cefe3fdbf0264901637b5b22",
+      "bytes": 2489
+    },
+    "ejemplo/alcohol/notas.md": {
+      "sha256": "31a7834305c56d67984f7f4dba31770fc797bd62443a464e3bfb07b21d66f081",
+      "bytes": 1863
+    },
+    "ejemplo/alcohol/plan.md": {
+      "sha256": "596a81244b996c88cce08581583b40141000fce38d5c0f31118831073563f587",
+      "bytes": 5328
+    },
+    "ejemplo/estrella-verde/guion.json": {
+      "sha256": "e71e9d708a9f19e2764a4eb226a5b71e947347601d671e65ebebf27a7d5f8e50",
+      "bytes": 1375
+    },
+    "ejemplo/estrella-verde/idea.md": {
+      "sha256": "a68c07df0fba43f8d26d00f6f6aa42a04cf3f2dbaf1faaf39012185883fdcb50",
+      "bytes": 2099
+    },
+    "ejemplo/estrella-verde/notas.md": {
+      "sha256": "4bd21217c7b7e1c108dbc6b85ad42fec3759662c2a456f2e2734301607ea46fc",
+      "bytes": 2376
+    },
+    "ejemplo/estrella-verde/plan.md": {
+      "sha256": "84e7e1f4a6366a84b27285c70ddb0e69694fa4c3ced0885887357858302fb94c",
+      "bytes": 4790
+    },
+    "guia/dibujar.md": {
+      "sha256": "885f55714fce51dc7b4913cccc2c5af567598b1c8e7312054292867a4116962b",
+      "bytes": 9060
+    },
+    "guia/guion.md": {
+      "sha256": "e719a81e6830f2c14645035bf6f6b83a260ac02a0c55dfad66c6c8256e4dc5f6",
+      "bytes": 7719
+    },
+    "guia/sonido.md": {
+      "sha256": "543c93f80511cb0dd6670bea5d3d5ae28840ba2566addb50f8617eab0f58974e",
+      "bytes": 4126
+    },
+    "letra/Figtree-Bold.ttf": {
+      "sha256": "82db65f23c758c081a182921b220275261a8c1a16152900a44e840578ffe578e",
+      "bytes": 40128
+    },
+    "letra/Figtree-ExtraBold.ttf": {
+      "sha256": "90171634fe92ffedff1fffd636ac468b3c87520419f5e59301183ab648676a53",
+      "bytes": 40120
+    },
+    "letra/Figtree-Medium.ttf": {
+      "sha256": "1cf1dd7a55919805a55a1bc93b92d8f48654bef7c5e53cb6b5b519c0f2ba8a33",
+      "bytes": 40124
+    },
+    "letra/OFL.txt": {
+      "sha256": "140d37233e7f3ce7313798befa9600893bcceaf41a55fa0fa5ad52f7f657a268",
+      "bytes": 4388
+    },
+    "marca.json": {
+      "sha256": "39e931d7f72fa25eae7f929bedc2bcfeb141c5c1a60a11f0ddfba5a58ab1678f",
+      "bytes": 43
+    },
+    "referencia/motor/carrusel.mjs": {
+      "sha256": "975de1b3d4e4b0ec17def432b7b9d276f6fab35b98246c617132f84cdd1e9b82",
+      "bytes": 5715
+    },
+    "referencia/motor/clave.mjs": {
+      "sha256": "dbff72290eb15c3ac0d8d88950c5e662c864091322c8db68c23603b0f993a1c5",
+      "bytes": 3094
+    },
+    "referencia/motor/doctor.mjs": {
+      "sha256": "b9272eee5de17271d5553d0f93656ef0e8f00ce72e62c510074414f495d0bacd",
+      "bytes": 3550
+    },
+    "motor/kit/base.js": {
+      "sha256": "eeb76a720b108acb4a2156c9c15de5db599820760e01fe9696c9b14123ab7ebe",
+      "bytes": 6864
+    },
+    "motor/kit/camara.js": {
+      "sha256": "9e348e859a15d54aef9097f6bda2d801a8586044022ccc11f71145fb5bff6b7d",
+      "bytes": 2419
+    },
+    "motor/kit/cielo.js": {
+      "sha256": "12177eaa2f24c4ec0c5d4987f64a841a6f22ba26e8f1f263a405fff372e38009",
+      "bytes": 5808
+    },
+    "motor/kit/cuerpos.js": {
+      "sha256": "b4227d73e48e73d8a25020a1e18fd83239a5b75c9cdfd861c944085ad6aab58a",
+      "bytes": 9271
+    },
+    "motor/kit/fuego.js": {
+      "sha256": "94d6a7bd9e9e1549a88886527bafb6afcce76808508faa5efc2b090adf22ac62",
+      "bytes": 3300
+    },
+    "motor/kit/index.js": {
+      "sha256": "4695b89603872366753cb278b77fa169b98ff31071e195186525e70e9dac9dc0",
+      "bytes": 485
+    },
+    "motor/kit/luz.js": {
+      "sha256": "1f3c1a2d0cfbafaa7f70772e4881edfab3fdb0ad3c2ab5e73f19382cead09931",
+      "bytes": 4029
+    },
+    "motor/kit/materiales.js": {
+      "sha256": "7cc3132980fd7206f9f163fe103adde848d2dc523c986c0b6881ded836005d81",
+      "bytes": 2803
+    },
+    "motor/kit/texto.js": {
+      "sha256": "f2857e7c90e9d746d23de4f9ac773220cf7e0260a58b6fc7f7eaf943daa09e60",
+      "bytes": 2410
+    },
+    "motor/kit/texturas.js": {
+      "sha256": "e8b5e8ffdf74e456c936397d9f37acccf5693ace28341e2d0a42ff8c071b0a23",
+      "bytes": 3148
+    },
+    "motor/lib/comun.mjs": {
+      "sha256": "a527c30d386a3e3f5a3e3e8d520a79d87fe751fd9e753c4f4189a140b00d7bae",
+      "bytes": 5218
+    },
+    "motor/lib/cuadro.mjs": {
+      "sha256": "17d2cb9cd30316288f76b70b0f2a95d94b2d589cd0d7fe13fd7eba771a4e867c",
+      "bytes": 2986
+    },
+    "motor/lib/hilo.mjs": {
+      "sha256": "28fd7a67a23b3c45f51c3f6b3d94158b32202d5d40b7671f8d822259b758f37e",
+      "bytes": 841
+    },
+    "motor/lib/hojas.mjs": {
+      "sha256": "9144ff557020ae27b932ce0eefdfc9f27b8c26c416a6d35d9110dbb2fdcca6b1",
+      "bytes": 2432
+    },
+    "motor/lib/medidas.mjs": {
+      "sha256": "c85578c9cddb35f8a45b373c59511df5e9e4ea14f440b37352e086368ebcb0d0",
+      "bytes": 3815
+    },
+    "motor/lib/mezcla.mjs": {
+      "sha256": "c616705c4f35e1608058e1b5eb5a79329edef2635779011afe14b6bf02063325",
+      "bytes": 4540
+    },
+    "motor/lib/proyecto.mjs": {
+      "sha256": "049b0f16c8635c0d2ea1a27323f8af3b5bef2d73b0ad6e4c3ce06fc4b3d7b3b6",
+      "bytes": 3255
+    },
+    "motor/lib/rotulos.mjs": {
+      "sha256": "e1f428a7164e6f86d7b8933a9ef57c8a55f02d9c211721a9a5e859075334b903",
+      "bytes": 11352
+    },
+    "motor/lib/saltos.mjs": {
+      "sha256": "bcb96d0e3ec2f81c5b038d8b54052db762e48dc13f15ef0ada5def1039f99394",
+      "bytes": 1500
+    },
+    "motor/lib/subtitulos.mjs": {
+      "sha256": "cba926f325d45faae987b73c496f54bef93413e8eea00f02237747065417694e",
+      "bytes": 5141
+    },
+    "motor/lib/voz-actual.js": {
+      "sha256": "1c5ede0131700faf031b2769ea9bf15b950cd3740da338dc59c83e6c7d85da33",
+      "bytes": 2394
+    },
+    "referencia/motor/muestras.mjs": {
+      "sha256": "464c0e4c4b11ee2200df65758b853d1ec64c254c2b4ceefa4208a1f6db96e24b",
+      "bytes": 5092
+    },
+    "referencia/motor/nuevo.mjs": {
+      "sha256": "03e0dd6f96849347314e172a30a4df37200ab628325507fc90dc9072766e0ec6",
+      "bytes": 4891
+    },
+    "referencia/motor/portada.mjs": {
+      "sha256": "1073181c3b5e85bb04589598c80261ebcb530e11596c081f03154a01390193e3",
+      "bytes": 10786
+    },
+    "referencia/motor/render.mjs": {
+      "sha256": "97de76400a6ca1ce28d8cf4b16eed532613dc64034f38f386893219f0a7305c2",
+      "bytes": 7383
+    },
+    "referencia/motor/revisar.mjs": {
+      "sha256": "5828ca2a2643cad26aa9805eaee254aef0777609075493b56296910f72c6a615",
+      "bytes": 6527
+    },
+    "referencia/motor/sonido.mjs": {
+      "sha256": "77aec36b1b159e30dd44e62b4c5447bb0b999c41ff27fcafe764b31d68cf526d",
+      "bytes": 2809
+    },
+    "referencia/motor/ver.mjs": {
+      "sha256": "d3c1dbe7aae168ec4a26525cfd2281dbb9e26f6476a7486a026c969d043ab131",
+      "bytes": 4327
+    },
+    "referencia/motor/voz.mjs": {
+      "sha256": "009845d73cdc80786d38ebd2da169425691bb83e44b64b2998be3b5c45f20c42",
+      "bytes": 7704
+    },
+    "referencia/package-lock.json": {
+      "sha256": "4220e71c88ef706754eb3813bd4d698191df6706a2aba21f62f6d27b1f1177be",
+      "bytes": 8083
+    },
+    "package.json": {
+      "sha256": "2a46f00375fab8fab2007bc364c01bc67ea86927b37c10862ae3510fad43df18",
+      "bytes": 352
+    },
+    "packs/100-temas.md": {
+      "sha256": "baedf17c95c8a84b59ce87a957a75fa0a67fa29949132cb2443b5351d9d147b2",
+      "bytes": 6725
+    },
+    "packs/calendario.md": {
+      "sha256": "25be52112599ce2b95dbee3465f42a8965f90d63ae2998d8e1a78c806b05a5e4",
+      "bytes": 3232
+    },
+    "packs/captions.md": {
+      "sha256": "6a92cbbd54bcc65849cf58e07b4cca2fdb55fb9290ba3912cc6c4fa2ed9e3bab",
+      "bytes": 3722
+    },
+    "packs/estilos.md": {
+      "sha256": "16a58b91c224e0ddb509202b7296360d1d67303c7d51341e8eec145ed1fd92f1",
+      "bytes": 1744
+    },
+    "packs/negocios.md": {
+      "sha256": "e2f18a9028eb3fff778d6b423debf28a39e142bfe27a188d6e53ae00f3a578fc",
+      "bytes": 3979
+    },
+    "packs/nichos.md": {
+      "sha256": "5b5393269b95610e18d9bc29c221a9d90c4a79eb3455cb12b35184308f07879b",
+      "bytes": 6156
+    },
+    "packs/portadas.md": {
+      "sha256": "031866740f13cb3609a028be23149b79ff1514dc235a0ab795c13be3838b3af0",
+      "bytes": 5475
+    },
+    "packs/repurposing.md": {
+      "sha256": "b209398d390d5de1f503d4b81438885af14d2f99e3bcf62b0598c62904d31ba8",
+      "bytes": 2672
+    },
+    "packs/series.md": {
+      "sha256": "ab51aadc0dbcdd1d9a3fa770a4a51ac358e323140c01548cd1991da42a7fa26e",
+      "bytes": 2447
+    },
+    "piezas/LEEME.md": {
+      "sha256": "c2f0b4fd21ce5441c3de4805753d5f214db3bc55116b77e7d2c0ca5a9b77000a",
+      "bytes": 2818
+    },
+    "piezas/boton-comprar.js": {
+      "sha256": "6b674685ca3680490877e9c10ae3a11b8239339de5a60caed5553c76f05dfb2c",
+      "bytes": 1717
+    },
+    "piezas/capturas.js": {
+      "sha256": "c949c5ea2e8e24272faf3b54793453bc6aa86ce7d021154862ddacc5807e8525",
+      "bytes": 10874
+    },
+    "piezas/celular.js": {
+      "sha256": "106d54c17aa429e9d10436e02210f650e2a6313f586d7fe622f780bbfc43b97e",
+      "bytes": 7225
+    },
+    "piezas/planos/comprar.js": {
+      "sha256": "dc8b00dbd220281777e6f47090d7d9e76bb007bdd196fc93862dbda7c3f20f33",
+      "bytes": 3440
+    },
+    "piezas/planos/cuentas.js": {
+      "sha256": "847da89ee1ed32329717d7ef5f1801f1ece6f1ded15faea0b30804a431b142c1",
+      "bytes": 5541
+    },
+    "piezas/objetos.js": {
+      "sha256": "b8caf49dfe9e78d7a8fd4f6e1359bf0ec1a1e46ef0e5ebf3ee94f6b545e6444f",
+      "bytes": 11498
+    },
+    "piezas/subtitulos.js": {
+      "sha256": "8dd5a5b7a1a25082db5b0d4dcb6e7ea466f65171d3a934e66df1332884681db2",
+      "bytes": 1253
+    },
+    "piezas/planos/susurro.js": {
+      "sha256": "3539023d98e6f86f128f5a1a4d876a21172756ea126989f7423c2ddd9ac2d33d",
+      "bytes": 12688
+    },
+    "piezas/titulo-portada.js": {
+      "sha256": "67bf355981b7972fc5311703108472ba7b7cf4e193e426d64a9dc649babb5500",
+      "bytes": 1320
+    },
+    "plantillas.md": {
+      "sha256": "2a03088dc8306299062750053646164c9bb578194f3875f82302fa9c1c600784",
+      "bytes": 3620
+    },
+    "sonidos/LEEME.md": {
+      "sha256": "f08534e492b23e63acc56a2537c073b3c6a0fecbc930d796872d489a1a8091cc",
+      "bytes": 3017
+    },
+    "sonidos/aire.mp3": {
+      "sha256": "ad3bd504ec4c3c6211e43febb49267e96d1746a34556ee65172ee77a60077a1c",
+      "bytes": 10492
+    },
+    "sonidos/aprieta.mp3": {
+      "sha256": "97bb73c9f73d0a9ddd4d88dd6b07e04423c6a91fedbed75d4e25834cc37af431",
+      "bytes": 20105
+    },
+    "sonidos/aviso.wav": {
+      "sha256": "b01b859985ddc69240a2101b496e601c881420fd1f3a52ae73a52ed92cbe846b",
+      "bytes": 84750
+    },
+    "sonidos/canon.wav": {
+      "sha256": "2ac22a5ca117c0de6efcf7f14a86f1c54201c92453b57c9d6c2d5393e14686b9",
+      "bytes": 211758
+    },
+    "sonidos/cash.mp3": {
+      "sha256": "485142174c60fc4d1be387ecb3d30d2fb0aa353ccc7efd7060c7b6c4e6b87c39",
+      "bytes": 20105
+    },
+    "sonidos/clic.mp3": {
+      "sha256": "36e4d75e83e8db4fe614e0a54e818f25885cf027ccd6dc24ae4379df5f429e2e",
+      "bytes": 8820
+    },
+    "sonidos/cristal.mp3": {
+      "sha256": "8d35226f1362d0e054a7aaf95c6c1730ac2ed3b1a2e93291738a580095041be7",
+      "bytes": 8820
+    },
+    "sonidos/cruje.mp3": {
+      "sha256": "a32775acd7ccdf119ff51336a73a7e2cf5eabb09075299225b00914f01feca87",
+      "bytes": 12163
+    },
+    "sonidos/cuadro.wav": {
+      "sha256": "b4f8b19dbecd7520f7f9574c8439d7f2c1cfb8591eb208f669688ff8116c44bf",
+      "bytes": 84750
+    },
+    "sonidos/desliza.mp3": {
+      "sha256": "7ecf95b38c7d453a5acd2dc8d1325787d8ef21defc8d8514b337a142b038f4ef",
+      "bytes": 17179
+    },
+    "sonidos/empujon.mp3": {
+      "sha256": "4c9402d01409cbef9ec54cab6628a5bd409d8271e69a929358cdedf79f4e70c4",
+      "bytes": 10492
+    },
+    "sonidos/enganche.mp3": {
+      "sha256": "4841a8fece6a3b68da469d64f90d75e2abef81b59138802bb9a18738c7bfe032",
+      "bytes": 8820
+    },
+    "sonidos/estallido.wav": {
+      "sha256": "bf2947471f87986f7f9ce5279e6258b9ad76ae6ff14a20634897ee970321746d",
+      "bytes": 261150
+    },
+    "sonidos/golpe-hondo.wav": {
+      "sha256": "2d4080ce127c5b35d73d5444e63ef103cf2d4b72e6389cfdd57986f417a8a647",
+      "bytes": 84750
+    },
+    "sonidos/golpe.wav": {
+      "sha256": "14ab98caf559f19e31f6d35d5407576238dcd05c22015b6c9fcc34be2e898589",
+      "bytes": 84750
+    },
+    "sonidos/hueco.wav": {
+      "sha256": "4147cca8a6c4bfac28a4a5c5f16b4cdbc1f9b8f7bcfe9290256f94ffa039c51d",
+      "bytes": 84750
+    },
+    "sonidos/late.mp3": {
+      "sha256": "834b081aa76f3cbcfb2b3b8ad9ff303880bc325120209af1dfdf1be809cd9191",
+      "bytes": 8820
+    },
+    "sonidos/lingote.wav": {
+      "sha256": "afcc57f50f4c371aa3e4a6070941ebeca5fcd4307760f07db879aad79407c648",
+      "bytes": 120074
+    },
+    "sonidos/madera-rota.wav": {
+      "sha256": "fcb4f34137a8d6be2edd9d7019652e9ddf66c9cfecc8541e212689ae71cf0719",
+      "bytes": 141198
+    },
+    "sonidos/madera.mp3": {
+      "sha256": "e0991d9792cc8722e73b83841e6b230f3077487184d52844164526c6b7f64815",
+      "bytes": 8820
+    },
+    "sonidos/metal.mp3": {
+      "sha256": "aec40c94b6f175bcf66f12f3e38c23e3e7474ab290575938d21a8a082918a330",
+      "bytes": 10492
+    },
+    "sonidos/muro.mp3": {
+      "sha256": "09213b9aa87d4dcffe7aeb82e69343a920d8a88324163582b8af8b70f14c3aa8",
+      "bytes": 12163
+    },
+    "sonidos/papel.wav": {
+      "sha256": "9cc8d896a39372b555114982745bfcd1649393b6f5bce37bff32560f042d9cc4",
+      "bytes": 84750
+    },
+    "sonidos/pelota.wav": {
+      "sha256": "4b4fb4f44d911489195a149747ccab7239bab856c6d7163c62e33f6ed1be5aaa",
+      "bytes": 141198
+    },
+    "sonidos/pitido.wav": {
+      "sha256": "c9199aa9026d0f88dfd36e8be54c5619617939c00fa749439414031928e689ae",
+      "bytes": 84750
+    },
+    "sonidos/roca.wav": {
+      "sha256": "a390a2a73c647fbd9f3cd4e5e84fc0ab441ab42157ca78b2490d64a94f3406dc",
+      "bytes": 105918
+    },
+    "sonidos/sube.mp3": {
+      "sha256": "eb33dc7ae2679e90fad9f39ba6c26275cd56744f012a5adb24f0c5fdc35703e4",
+      "bytes": 8820
+    },
+    "sonidos/tic.mp3": {
+      "sha256": "0ca0baf22695163b924e2e402c9cea41943db43988b85f3a28007cdb1ba2e071",
+      "bytes": 8820
+    },
+    "sonidos/tierra.wav": {
+      "sha256": "7bdf6bba2b7b463ffe48b18edc98426bdc942f51091481d61047ab0108ab93c5",
+      "bytes": 120074
+    },
+    "sonidos/timbre.wav": {
+      "sha256": "f8b8681739b5f466e04b36f9630406aee4cf32ab7d4b4735e7353197074c0840",
+      "bytes": 141198
+    },
+    "sonidos/toque.mp3": {
+      "sha256": "5daee701681efa2d51ad7a17779f6bb991166316166b156e9ab74d6571be5450",
+      "bytes": 8820
+    },
+    "temas-usados.md": {
+      "sha256": "f0e4bfb05f46f6051d864a5e42f84f4a33cc9c06162c16ca7bea85e62c6a923f",
+      "bytes": 121
+    }
+  }
+}

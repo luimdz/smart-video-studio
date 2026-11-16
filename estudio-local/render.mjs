@@ -1,10 +1,11 @@
+import {writeDescriptions} from './deliverables.mjs';
 import {captionCues, backgroundFilter, sceneWindow} from './video-editing.mjs';
 import {alignedWords} from './code-art-scene.mjs';
 import {fileURLToPath} from 'node:url';
 import {ensureCodeArt} from './code-art-resources.mjs';
 import {narrationText,usesExactText,isPoster} from './content.mjs';
 import { spawn } from 'node:child_process';
-import { mkdir, writeFile, readFile, statfs, realpath, access, rename, rm } from 'node:fs/promises';
+import { mkdir, writeFile, readFile, statfs, realpath, access, rename, rm, readdir } from 'node:fs/promises';
 import path from 'node:path';
 import { sharp } from './deps.mjs';
 export const escapeXml=v=>String(v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&apos;'}[c]));
@@ -12,11 +13,11 @@ const words=(s,width)=>{const lines=[];let line='';for(const w of String(s).spli
 export async function processFile(command,args,cwd){return await new Promise((resolve,reject)=>{const p=spawn(command,args,{cwd,stdio:['ignore','pipe','pipe']});let output='',error='';p.stdout.on('data',d=>output+=d);p.stderr.on('data',d=>error=(error+d).slice(-6000));p.on('error',reject);p.on('close',c=>c===0?resolve(output):reject(new Error(`${path.basename(command)} no completó la operación (${c}). ${error.slice(-500)}`)));});}
 export async function storageStatus(root){if(!root)return {configured:false};try{const info=await statfs(root);return {configured:true,available:true,freeBytes:Number(info.bavail)*Number(info.bsize),root:await realpath(root)};}catch{return {configured:true,available:false,root};}}
 export async function requireStorage(root){const info=await storageStatus(root);if(!info.available)throw new Error('La carpeta de producción no está disponible. Conecta el disco seleccionado.');if(info.freeBytes<3*1024**3)throw new Error('La biblioteca necesita al menos 3 GB libres para continuar.');return info.root;}
-export async function renderEpisode(j,profile,number,library,{width=1080,height=1920}={}){
+export async function renderEpisode(j,profile,number,library,{width=1080,height=1920,preview=false}={}){
   await requireStorage(library);const audio=j.audio[number];if(!audio)throw new Error('Falta la voz de este capítulo.');
   if(audio.duration>300)throw new Error('La voz supera el máximo de 300 segundos. Ajusta el guion antes de exportar.');
   const dir=path.join(library,'productions',j.id,`episode-${String(number).padStart(2,'0')}`);await mkdir(dir,{recursive:true});const temp=path.join(dir,'work');await mkdir(temp,{recursive:true});
-  if(j.style==='2d')return renderCodeArtEpisode(j,profile,number,dir,{width,height});
+  if(j.style==='2d')return renderCodeArtEpisode(j,profile,number,dir,{width,height,preview});
   const poster=isPoster(j),generated=j.generatedImages?.[number]||[];if(!j.demo&&(poster||(!(j.productionImages?.length)&&!(j.useProfileImages&&profile.assets?.length)))&&!generated.length)throw new Error('Falta la imagen generada por IA. No se usará un dibujo local de reemplazo.');
   const backgrounds=j.useProfileImages?(profile.assets||[]):[];let base;
   const reference=generated[0]?.file||j.productionImages?.[0]?.file||(j.useReferenceBackground?j.referenceImages?.[0]?.file:null);
@@ -51,7 +52,8 @@ export async function renderEpisode(j,profile,number,library,{width=1080,height=
   const check=JSON.parse(await processFile('ffprobe',['-v','error','-show_format','-show_streams','-of','json',pending],dir));
   if(!check.streams.some(s=>s.codec_type==='audio')||!check.streams.some(s=>s.codec_type==='video'&&s.width===width&&s.height===height)||Math.abs(Number(check.format.duration)-audio.duration)>0.6)throw new Error('La comprobación del archivo exportado falló.');
   await rename(pending,file);await writeFile(path.join(dir,'script.json'),JSON.stringify(j.scripts[number-1],null,2));await writeFile(path.join(dir,'copy.txt'),`Título: ${j.scripts[number-1]?.title||j.title}\n\nFacebook\n${j.scripts[number-1]?.facebookCopy||''}\n\nInstagram\n${j.scripts[number-1]?.instagramCopy||''}`);await rm(temp,{recursive:true,force:true});
-  return {file,...(poster?{image:path.join(dir,'imagen.png')}:{}),duration:Number(check.format.duration),bytes:Number(check.format.size),width,height,readyAt:new Date().toISOString()};
+  const descriptionFile=await writeDescriptions(dir,j.scripts[number-1]);
+  return {file,descriptions:descriptionFile,...(poster?{image:path.join(dir,'imagen.png')}:{}),duration:Number(check.format.duration),bytes:Number(check.format.size),width,height,readyAt:new Date().toISOString()};
 }
 
 export function letterOverlay(text,name=''){
@@ -73,15 +75,17 @@ export function motionSceneSvg(j,profile,number,index){
  return `<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1920"><defs><linearGradient id="bg" x2="1" y2="1"><stop stop-color="#102335"/><stop offset="1" stop-color="hsl(${hue},40%,14%)"/></linearGradient><pattern id="grid" width="70" height="70" patternUnits="userSpaceOnUse"><path d="M70 0H0V70" fill="none" stroke="#b5e6ef" stroke-opacity=".08"/></pattern></defs><rect width="1080" height="1920" fill="url(#bg)"/><rect width="1080" height="1920" fill="url(#grid)"/><text x="76" y="110" font-family="Arial" font-size="26" fill="#b2d3df">${escapeXml(profile.name.slice(0,40))}</text><text x="76" y="240" font-family="Arial" font-size="42" font-weight="bold" fill="#e2f6f6">${forensic?'REGISTRO VISUAL':'IDEAS EN MOVIMIENTO'}</text><text x="76" y="320" font-family="Arial" font-size="25" fill="#81c3cf">${String(index+1).padStart(2,'0')} / ${String(j.scripts[number-1]?.scenes.length||1).padStart(2,'0')}</text>${illustration}</svg>`;
 }
 
-async function renderCodeArtEpisode(j,profile,number,dir,{width,height}){
+async function renderCodeArtEpisode(j,profile,number,dir,{width,height,preview=false}){
+ if(preview){dir=path.join(dir,'draft-v1');await mkdir(dir,{recursive:true});}const fps=preview?15:60;
  const plan=j.codeArtPlans?.[number];if(!plan)throw new Error('Falta la planificación visual CODE ART. Se conserva la voz para continuar sin generarla otra vez.');await ensureCodeArt();
  const pending=path.join(dir,'video.pending.mp4'),file=path.join(dir,'video.mp4'),config=path.join(dir,'code-art.json');
- await writeFile(config,JSON.stringify({plan,script:j.scripts[number-1],audio:j.audio[number],coverTitle:j.scripts[number-1]?.coverTitle||j.title,profile:{name:profile.name,color:profile.color},logo:j.useLogo?j.logo:null,dir,output:pending,width,height,fps:60}));
+ await writeFile(config,JSON.stringify({plan,script:j.scripts[number-1],audio:j.audio[number],coverTitle:j.scripts[number-1]?.coverTitle||j.title,profile:{name:profile.name,color:profile.color},logo:j.useLogo?j.logo:null,productionImages:j.productionImages||[],useEffects:j.useEffects!==false,subtitlesEnabled:j.subtitlesEnabled!==false,dir,output:pending,width,height,fps}));
  await processFile(process.execPath,[fileURLToPath(new URL('./code-art-render.mjs',import.meta.url)),config],dir);
  const check=JSON.parse(await processFile('ffprobe',['-v','error','-show_format','-show_streams','-of','json',pending],dir));
- if(!check.streams.some(s=>s.codec_type==='audio')||!check.streams.some(s=>s.codec_type==='video'&&s.width===width&&s.height===height&&s.r_frame_rate==='60/1')||Math.abs(Number(check.format.duration)-j.audio[number].duration)>.6)throw new Error('La comprobación del video CODE ART falló.');
+ if(!check.streams.some(s=>s.codec_type==='audio')||!check.streams.some(s=>s.codec_type==='video'&&s.width===width&&s.height===height&&s.r_frame_rate===`${fps}/1`)||Math.abs(Number(check.format.duration)-j.audio[number].duration)>.6)throw new Error('La comprobación del video CODE ART falló.');
  await rename(pending,file);await writeFile(path.join(dir,'script.json'),JSON.stringify(j.scripts[number-1],null,2));await writeFile(path.join(dir,'copy.txt'),`Título: ${j.scripts[number-1].title}\n\nFacebook\n${j.scripts[number-1].facebookCopy}\n\nInstagram\n${j.scripts[number-1].instagramCopy}`);
- return {file,duration:Number(check.format.duration),bytes:Number(check.format.size),width,height,fps:60,renderer:'code-art',readyAt:new Date().toISOString()};
+ const descriptionFile=await writeDescriptions(dir,j.scripts[number-1]),reviewFrames=(await readdir(dir)).filter(name=>/^revision-[0-9.]+\.jpg$/.test(name)).sort((a,b)=>parseFloat(a.slice(9))-parseFloat(b.slice(9))).map(name=>path.join(dir,name));
+ return {file,cover:path.join(dir,'flyer.jpg'),descriptions:descriptionFile,reviewFrames,duration:Number(check.format.duration),bytes:Number(check.format.size),width,height,fps,renderer:preview?'code-art-draft':'code-art',readyAt:new Date().toISOString()};
 }
 
 export function sceneRanges(audio,script){const words=alignedWords(audio);let cursor=0;return script.scenes.map((scene,i)=>{const start=i?words[cursor]?.inicio??audio.duration:0;cursor+=[scene.narration,...scene.dialogue.map(d=>d.text)].join(' ').trim().split(/\s+/).filter(Boolean).length;return {start,end:i===script.scenes.length-1?audio.duration:words[cursor]?.inicio??audio.duration};});}
