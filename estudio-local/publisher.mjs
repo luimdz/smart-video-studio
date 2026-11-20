@@ -18,8 +18,9 @@ export function createPublisher(store,{fetcher=fetch,now=()=>Date.now(),blob=ope
    let url,video;
    try{url=publisherUrl(config.publisherUrl);video=job.videos[item.episode];const info=await stat(video.file);if(info.size>500*1024*1024)throw new Error('El video supera 500 MB.');}
    catch(error){item.status='blocked';item.error=error.message;savePublication(store,item);continue;}
-   const profile=store.list('profiles').find(p=>p.id===job.profileId),script=job.scripts[item.episode-1];
-   const form=new FormData();form.set('manifest',JSON.stringify({protocolVersion:1,publicationId:item.id,productionId:job.id,episode:item.episode,platform:item.platform,profileId:job.profileId,destination:profile?.[item.platform]||'',scheduledAt:item.at,title:script?.title||job.title,caption:item.platform==='instagram'?script?.instagramCopy||'':script?.facebookCopy||''}));
+   if(!item.destination){item.status='blocked';item.error='Falta un destino confirmado. Cancela esta entrada y crea una programación con el perfil configurado.';savePublication(store,item);continue;}
+   const script=job.scripts[item.episode-1];
+   const form=new FormData();form.set('manifest',JSON.stringify({protocolVersion:1,publicationId:item.id,productionId:job.id,episode:item.episode,platform:item.platform,profileId:job.profileId,destination:item.destination,scheduledAt:item.at,title:script?.title||job.title,caption:item.platform==='instagram'?script?.instagramCopy||'':script?.facebookCopy||''}));
    try{form.set('video',await blob(video.file,{type:'video/mp4'}),`reel-${item.episode}.mp4`);}catch{item.status='blocked';item.error='No se puede leer el video local.';savePublication(store,item);continue;}
    const latest=publications(store).find(p=>p.id===item.id);
    if(!latest||!['scheduled','waiting_video','blocked'].includes(latest.status)||latest.at!==item.at)continue;

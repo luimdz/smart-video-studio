@@ -30,3 +30,7 @@ test('solo se recupera el piloto interrumpido por reinicio y sin reservas incier
 test('terminar la producción activa la agenda sin resucitar publicaciones canceladas',t=>{
  const {store,input,now}=fixture(t),j=createAutopilot(store,input,now);scheduleReels(store,j);const p=publications(store)[0];changePublication(store,{id:p.id,action:'cancel'});j.status='ready';store.saveJob(j);scheduleReels(store,j);assert.equal(publications(store).filter(p=>p.status==='scheduled').length,3);assert.equal(publications(store).find(x=>x.id===p.id).status,'cancelled');
 });
+
+test('la agenda conserva la cuenta autorizada aunque luego se edite el perfil',t=>{
+ const {store,input,now,profile}=fixture(t),j=createAutopilot(store,input,now);profile.instagram='otra-cuenta';store.db.prepare('UPDATE profiles SET data=? WHERE id=?').run(JSON.stringify(profile),profile.id);scheduleReels(store,j);assert.equal(publications(store).find(p=>p.platform==='instagram').destination,'cuenta-prueba');
+});

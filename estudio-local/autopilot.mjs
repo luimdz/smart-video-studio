@@ -15,7 +15,7 @@ export function createAutopilot(store,input,now=Date.now()){
  if(d.publish&&d.platforms.some(platform=>!profile?.[platform]?.trim()))throw new Error('Completa los destinos de Instagram y Facebook en las preferencias del perfil antes de publicar.');
  const topic=`Crea ${d.episodes===1?'un reel original':'una serie coherente de '+d.episodes+' reels originales'} a partir de esta idea: ${d.phrase}. Usa el contexto y la audiencia del perfil. No leas estas instrucciones. No inventes estadísticas, fuentes ni resultados. Si no hay evidencia aportada, evita afirmaciones específicas que necesiten verificación.`+inspiration;
  const job=store.addJob({profileId:d.profileId,title:d.phrase,topic,type:d.episodes===1?'video':'series',episodes:d.episodes,duration:d.duration,style:d.style,maxCredits:d.maxCredits,maxImages:Math.min(1000,d.episodes*10),imageProvider:store.settings().defaultImageProvider||'gemini',reviewBeforeVoice:false,reviewBeforeFinal:false,requestKey:d.requestKey});
- job.autopilot={enabled:true,publish:d.publish,platforms:[...new Set(d.platforms)],firstAt:d.firstAt||null,intervalHours:d.intervalHours,analyticsReference:reference?.url||null,createdAt:new Date(now).toISOString()};
+ job.autopilot={enabled:true,publish:d.publish,destinations:{instagram:profile?.instagram||'',facebook:profile?.facebook||''},platforms:[...new Set(d.platforms)],firstAt:d.firstAt||null,intervalHours:d.intervalHours,analyticsReference:reference?.url||null,createdAt:new Date(now).toISOString()};
  store.saveJob(job);return job;
 }
 export function scheduleReels(store,job){
@@ -23,7 +23,7 @@ export function scheduleReels(store,job){
  const insert=store.db.prepare('INSERT OR IGNORE INTO publication_queue(id,job_id,episode,platform,data) VALUES(?,?,?,?,?)');
  for(let n=1;n<=job.episodes;n++)for(const platform of job.autopilot.platforms){
   const at=new Date(Date.parse(job.autopilot.firstAt)+(n-1)*job.autopilot.intervalHours*3600000).toISOString();
-  const item={id:randomUUID(),jobId:job.id,episode:n,platform,at,status:job.status==='ready'?'scheduled':'waiting_video',createdAt:new Date().toISOString()};
+  const item={id:randomUUID(),jobId:job.id,episode:n,platform,destination:job.autopilot.destinations?.[platform]||'',at,status:job.status==='ready'?'scheduled':'waiting_video',createdAt:new Date().toISOString()};
   insert.run(item.id,job.id,n,platform,JSON.stringify(item));
  }
  if(job.status==='ready')for(const item of publications(store))if(item.jobId===job.id&&item.status==='waiting_video'){item.status='scheduled';savePublication(store,item);}
