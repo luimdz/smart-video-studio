@@ -15,7 +15,7 @@ export const jobSchema = z.object({ profileId: z.string().uuid(), title: z.strin
   if(v.useLogo&&!v.logoId)c.addIssue({code:'custom',message:'Adjunta un logo PNG o desactiva la opción de logo.'});
   if(v.useReferenceBackground&&!v.referenceIds.length)c.addIssue({code:'custom',message:'Adjunta una imagen para usarla como fondo.'});
   if(v.type==='series'&&v.textMode==='verbatim'&&v.staticText.trim())c.addIssue({code:'custom',message:'En una serie, deja el texto estático vacío para crear un texto propio por capítulo.'});
-  if(v.type==='series' && v.episodes<3)c.addIssue({code:'custom',message:'Una serie debe tener de 3 a 25 capítulos.'});
+  if(v.type==='series' && v.episodes<2)c.addIssue({code:'custom',message:'Una serie debe tener de 2 a 25 capítulos.'});
   if(v.type!=='series' && v.episodes!==1)c.addIssue({code:'custom',message:'Un video individual tiene un capítulo.'});
   if(v.type==='vsl' && v.duration<120)c.addIssue({code:'custom',message:'Una VSL debe durar entre 120 y 300 segundos.'});
 });
@@ -62,7 +62,7 @@ export function createStore(root) {
   function assertTextBudget(required,limit){const budget=textBudget(required,limit);if(budget.shortfall)throw textBudgetError(budget);return budget;}
   function secrets(){const r=db.prepare("SELECT data FROM settings WHERE id='secrets'").get();if(!r)return {};const d=JSON.parse(r.data);const cipher=createDecipheriv('aes-256-gcm',key,Buffer.from(d.iv,'base64'));cipher.setAuthTag(Buffer.from(d.tag,'base64'));return JSON.parse(Buffer.concat([cipher.update(Buffer.from(d.value,'base64')),cipher.final()]).toString());}
   function saveSettings(config, incoming={}){
-    const secretValues={...secrets()};for(const [k,v] of Object.entries(incoming))if(['geminiKey','elevenKey','n8nToken','openaiKey'].includes(k)&&typeof v==='string'&&v.trim())secretValues[k]=v.trim();
+    const secretValues={...secrets()};for(const [k,v] of Object.entries(incoming))if(['geminiKey','elevenKey','n8nToken','openaiKey','publisherToken','analyticsToken'].includes(k)&&typeof v==='string'&&v.trim())secretValues[k]=v.trim();
     const iv=randomBytes(12),cipher=createCipheriv('aes-256-gcm',key,iv);const value=Buffer.concat([cipher.update(JSON.stringify(secretValues)),cipher.final()]);
     db.prepare("INSERT OR REPLACE INTO settings VALUES('public',?)").run(JSON.stringify({...settings(),...config}));
     db.prepare("INSERT OR REPLACE INTO settings VALUES('secrets',?)").run(JSON.stringify({iv:iv.toString('base64'),tag:cipher.getAuthTag().toString('base64'),value:value.toString('base64')}));

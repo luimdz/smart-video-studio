@@ -83,3 +83,7 @@ El esquema de los planes visuales exige en la API listas de objetos no vacías y
 Una respuesta inválida ya guardada entra en una corrección acotada del plan. Esto incluye errores de formato como `shots.3.objects`, JSON incompleto y errores de validación visual; no se vuelve a pedir el original ni se genera otra voz. La comprobación de presupuesto estima la corrección pendiente en vez de fallar al leer el recibo original.
 
 Si también falla la corrección, el trabajo queda pausado con **Preparar otra corrección del plan · consume texto**. Prepararla no llama al proveedor: Producir solicita esa nueva corrección usando otro identificador de caché, conservando los recibos anteriores. Se admiten hasta tres ciclos adicionales solicitados expresamente. Una llamada incierta o un presupuesto insuficiente sigue bloqueando la petición. No se inventan objetos, no se omiten validaciones ni se renderiza un plan rechazado.
+
+## Piloto automático
+
+La pestaña **Piloto automático** crea e inicia un reel o una serie desde una frase, sin guardar y arrancar en pantallas distintas. Incluye agenda persistente para Instagram/Facebook, recibos de publicación y analítica relativa por cuenta. La publicación y la consulta automática de métricas necesitan workflows externos autorizados y configurados una vez; no se consideran conectados por guardar una URL. Consulta [PILOTO-AUTOMATICO.md](PILOTO-AUTOMATICO.md) para los requisitos, contratos y límites actuales.
