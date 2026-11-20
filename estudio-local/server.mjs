@@ -1,3 +1,7 @@
+import {createAnalyticsSource} from './analytics-source.mjs';
+import {canResumeAutopilot,createAutopilot,initPublications,publications,scheduleReels,changePublication} from './autopilot.mjs';
+import {createPublisher,publisherUrl} from './publisher.mjs';
+import {initAnalytics,importMetrics,analytics} from './trend-analytics.mjs';
 import {nextVisualRecovery} from './code-art-recovery.mjs';
 import {buildCodeArtRequest} from './code-art-plan-request.mjs';
 import {checkCodeArtBudget} from './code-art-budget.mjs';
@@ -26,7 +30,8 @@ import { z, sharp } from './deps.mjs';
 
 const here=path.dirname(fileURLToPath(import.meta.url));
 const stateDir=process.env.STUDIO_STATE_DIR||path.join(here,'.state');
-const store=createStore(stateDir);store.resetDrafts();
+const store=createStore(stateDir);store.resetDrafts();initPublications(store);initAnalytics(store);
+const publisher=createPublisher(store),analyticsSource=createAnalyticsSource(store);
 const port=Number(process.env.STUDIO_PORT||4317),origin=`http://127.0.0.1:${port}`,session=randomBytes(32).toString('hex');
 const active=new Set(),pauses=new Set();let admitting=false;
 const queue=createProductionQueue({run,onError:(id,error)=>{const j=store.getJob(id);j.status='failed';j.error=error.message;record(j,j.error);}});
@@ -34,9 +39,10 @@ const defaults=store.settings();if(!defaults.storageRoot){const root=path.join(h
 const json=(res,status,data)=>{res.writeHead(status,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'});res.end(JSON.stringify(data));};
 async function body(req){let size=0,parts=[];for await(const chunk of req){size+=chunk.length;if(size>25*1024*1024)throw new Error('El archivo supera el límite de 25 MB.');parts.push(chunk);}return JSON.parse(Buffer.concat(parts).toString()||'{}');}
 function record(j,message){j.events.unshift({at:new Date().toISOString(),message});j.events=j.events.slice(0,100);store.saveJob(j);}
-function view(j){return {id:j.id,title:j.title,type:j.type,style:j.style,episodes:j.episodes,duration:j.duration,status:j.status,progress:j.progress,error:j.error,profileId:j.profileId,createdAt:j.createdAt,updatedAt:j.updatedAt,maxCredits:j.maxCredits,stage:j.stage||'',pauseRequested:pauses.has(j.id),demo:!!j.demo,scriptCount:j.scripts.length,audioCount:Object.keys(j.audio).length,videos:Object.fromEntries(Object.entries(j.videos).map(([n,v])=>[n,{duration:v.duration,bytes:v.bytes,width:v.width,height:v.height}]))};}
-async function state(){const c=store.settings(),s=store.secrets();return {profiles:store.list('profiles'),editorial:store.list('jobs').filter(j=>j.purpose==='editorial').map(j=>({id:j.id,title:j.title,status:j.status,error:j.error,result:j.editorialResult,files:(j.editorialFiles||[]).map(f=>({name:f.name,type:f.type}))})),music:store.listMusic(),jobs:store.list('jobs').filter(j=>j.purpose!=='editorial').sort((a,b)=>b.createdAt.localeCompare(a.createdAt)).map(view),settings:c,connections:{gemini:!!s.geminiKey,openai:!!s.openaiKey,elevenlabs:!!s.elevenKey,n8nToken:!!s.n8nToken,n8n:!!(s.n8nToken&&c.n8nUrl)},usage:store.usage(),accounting:store.accounting(),storage:await storageStatus(c.storageRoot),codeArt:await resourceStatus(),active:active.size,queued:queue.pending};}
+function view(j){return {autopilot:j.autopilot||null,id:j.id,title:j.title,type:j.type,style:j.style,episodes:j.episodes,duration:j.duration,status:j.status,progress:j.progress,error:j.error,profileId:j.profileId,createdAt:j.createdAt,updatedAt:j.updatedAt,maxCredits:j.maxCredits,stage:j.stage||'',pauseRequested:pauses.has(j.id),demo:!!j.demo,scriptCount:j.scripts.length,audioCount:Object.keys(j.audio).length,videos:Object.fromEntries(Object.entries(j.videos).map(([n,v])=>[n,{duration:v.duration,bytes:v.bytes,width:v.width,height:v.height}]))};}
+async function state(){const c=store.settings(),s=store.secrets();return {publications:publications(store),analytics:analytics(store),publisherConfigured:!!(c.publisherUrl&&s.publisherToken),profiles:store.list('profiles'),editorial:store.list('jobs').filter(j=>j.purpose==='editorial').map(j=>({id:j.id,title:j.title,status:j.status,error:j.error,result:j.editorialResult,files:(j.editorialFiles||[]).map(f=>({name:f.name,type:f.type}))})),music:store.listMusic(),jobs:store.list('jobs').filter(j=>j.purpose!=='editorial').sort((a,b)=>b.createdAt.localeCompare(a.createdAt)).map(view),settings:c,connections:{gemini:!!s.geminiKey,openai:!!s.openaiKey,elevenlabs:!!s.elevenKey,n8nToken:!!s.n8nToken,n8n:!!(s.n8nToken&&c.n8nUrl)},usage:store.usage(),accounting:store.accounting(),storage:await storageStatus(c.storageRoot),codeArt:await resourceStatus(),active:active.size,queued:queue.pending};}
 async function coordinate(j){
+  if(j.autopilot?.enabled)return nextAction(j);
   const c=store.settings(),s=store.secrets();if(!c.useN8n)throw new Error('Conecta n8n para coordinar la producción.');
   const u=new URL(c.n8nUrl);if(u.protocol!=='https:'||u.hostname!=='n8n.planifyx.com')throw new Error('La dirección debe pertenecer a tu instancia n8n.planifyx.com y usar HTTPS.');
   const r=await fetch(u,{method:'POST',headers:{'Content-Type':'application/json','X-Studio-Token':s.n8nToken},body:JSON.stringify({productionId:j.id,totalEpisodes:j.episodes,hasBible:!!j.bible,hasOutline:!!j.outline,writtenEpisodes:j.scripts.length,correctionPending:!!j.corrections.length,reviewPassed:j.reviewPassed,voicedEpisodes:Object.keys(j.audio).length,renderedEpisodes:Object.keys(j.videos).length}),redirect:'error',signal:AbortSignal.timeout(20000)});
@@ -44,12 +50,12 @@ async function coordinate(j){
   const raw=await r.json(),result=Array.isArray(raw)?raw[0]:raw;
   if(result.productionId!==j.id||result.protocolVersion!==1||result.action!==nextAction(j))throw new Error('n8n devolvió una instrucción fuera del contrato esperado.');return result.action;
 }
-async function preflight(j){if(j.style==='2d')await ensureCodeArt();const c=store.settings(),s=store.secrets(),p=store.list('profiles').find(p=>p.id===j.profileId);await requireStorage(c.storageRoot);for(const image of [...(j.referenceImages||[]),...(j.productionImages||[]),...(j.useLogo&&j.logo?[j.logo]:[]),...(j.useMusic&&j.music?[j.music]:[])]){try{await access(image.file);}catch{throw new Error('No se encuentra una imagen adjunta. Conecta el disco donde la guardaste antes de producir.');}}if(needsImageGeneration(j,p)&&j.imageProvider==='openai'&&!s.openaiKey)throw new Error('Guarda la clave de OpenAI en Configuración para usar GPT Image 2.');const text=textSettings(c,s);if(!text.key)throw new Error(`Configura la clave de ${text.provider==='openai'?'OpenAI':'Gemini'} para texto en Configuración.`);if(j.narrationEnabled!==false&&!s.elevenKey)throw new Error('Configura la clave de ElevenLabs.');if(j.narrationEnabled!==false&&!p?.voiceId)throw new Error('Selecciona una voz para este perfil.');if(!c.n8nUrl||!s.n8nToken)throw new Error('Configura el workflow coordinador de n8n.');if(store.interruptedCharges(j.id).length)throw new Error('Hay una llamada de resultado incierto. Revisa el proveedor antes de repetir; la aplicación no volverá a cobrarla automáticamente.');if(j.style==='2d'&&['voice','render'].includes(nextAction(j))){const n=nextAction(j)==='voice'?j.scripts.findIndex((_,i)=>!j.audio[i+1])+1:j.scripts.findIndex((_,i)=>!j.videos[i+1])+1;await checkCodeArtBudget(store,j,n);}}
+async function preflight(j){if(j.style==='2d')await ensureCodeArt();const c=store.settings(),s=store.secrets(),p=store.list('profiles').find(p=>p.id===j.profileId);await requireStorage(c.storageRoot);for(const image of [...(j.referenceImages||[]),...(j.productionImages||[]),...(j.useLogo&&j.logo?[j.logo]:[]),...(j.useMusic&&j.music?[j.music]:[])]){try{await access(image.file);}catch{throw new Error('No se encuentra una imagen adjunta. Conecta el disco donde la guardaste antes de producir.');}}if(needsImageGeneration(j,p)&&j.imageProvider==='openai'&&!s.openaiKey)throw new Error('Guarda la clave de OpenAI en Configuración para usar GPT Image 2.');const text=textSettings(c,s);if(!text.key)throw new Error(`Configura la clave de ${text.provider==='openai'?'OpenAI':'Gemini'} para texto en Configuración.`);if(j.narrationEnabled!==false&&!s.elevenKey)throw new Error('Configura la clave de ElevenLabs.');if(j.narrationEnabled!==false&&!p?.voiceId)throw new Error('Selecciona una voz para este perfil.');if(!j.autopilot?.enabled&&(!c.n8nUrl||!s.n8nToken))throw new Error('Configura el workflow coordinador de n8n.');if(store.interruptedCharges(j.id).length)throw new Error('Hay una llamada de resultado incierto. Revisa el proveedor antes de repetir; la aplicación no volverá a cobrarla automáticamente.');if(j.style==='2d'&&['voice','render'].includes(nextAction(j))){const n=nextAction(j)==='voice'?j.scripts.findIndex((_,i)=>!j.audio[i+1])+1:j.scripts.findIndex((_,i)=>!j.videos[i+1])+1;await checkCodeArtBudget(store,j,n);}}
 async function run(id){let j=store.getJob(id);active.add(id);pauses.delete(id);try{
-  j.status='running';j.root=j.root||await requireStorage(store.settings().storageRoot);record(j,j.narrationEnabled===false?'Producción sin narración iniciada. No se consumen créditos de ElevenLabs.':'Producción iniciada. Las voces se generan después de revisar todos los guiones.');
+  j.resumeAutopilot=false;j.status='running';j.root=j.root||await requireStorage(store.settings().storageRoot);record(j,j.narrationEnabled===false?'Producción sin narración iniciada. No se consumen créditos de ElevenLabs.':'Producción iniciada. Las voces se generan después de revisar todos los guiones.');
   while(true){if(pauses.has(id)){j.status='paused';record(j,'Pausada después de guardar la etapa actual.');break;}
     const action=await coordinate(j);j.stage=action;store.saveJob(j);
-    if(action==='complete'){j.status='ready';j.progress=100;record(j,'Todos los videos y copies están guardados localmente. Publicación Meta pendiente de conectar.');break;}
+    if(action==='complete'){j.status='ready';j.progress=100;scheduleReels(store,j);record(j,j.autopilot?.publish?'Reels terminados. La cola publicará a la hora elegida con el publicador conectado.':'Todos los videos y copies están guardados localmente.');break;}
     if(action==='voice'&&j.reviewBeforeVoice&&!j.scriptApproved){j.status='paused';j.awaitingApproval='script';record(j,'Guiones listos para tu revisión. Apruébalos antes de generar voz.');break;}
     if(['bible','outline','script','correct','review'].includes(action))j=await planningStep(store,j,action);
     else if(action==='voice'){const n=j.scripts.findIndex((_,i)=>!j.audio[i+1])+1;j=await prepareImages(store,j,n);if(pauses.has(id))continue;j=await voiceStep(store,j,j.root);}
@@ -62,7 +68,7 @@ async function run(id){let j=store.getJob(id);active.add(id);pauses.delete(id);t
   }
  }catch(error){j.status=['TEXT_BUDGET_EXCEEDED','CODE_ART_REVIEW_REQUIRED'].includes(error.code)?'paused':'failed';j.visualReview=error.visualReview||null;j.budgetBlock=error.budget||null;j.error=error.issues?.[0]?.message||error.message;record(j,(error.budget?'Producción pausada antes de consumir más APIs: ':'La producción se detuvo: ')+j.error);}finally{active.delete(id);pauses.delete(id);store.saveJob(j);}}
 async function demo(){if(active.size)throw new Error('Espera a que termine la exportación actual.');let profile=store.list('profiles')[0];if(!profile)profile=store.addProfile({name:'Prueba local',niche:'Demostración del estudio',audience:'Propietario',brief:'Perfil de prueba creado al solicitar el render de demostración.'});
-  const j=store.addJob({profileId:profile.id,title:'Tu estudio, en movimiento',topic:'Prueba local de exportación, sin IA ni voz de proveedor.',type:'video',style:'motion',episodes:1,duration:30,maxCredits:100,requestKey:randomUUID()});j.demo=true;j.status='running';j.root=await requireStorage(store.settings().storageRoot);j.scripts=[{number:1,title:j.title,coverTitle:'Tu estudio, en movimiento',scenes:[],facebookCopy:'Demostración técnica. Sin voz de ElevenLabs.',instagramCopy:'Demostración técnica. Sin voz de ElevenLabs.'}];j.bible={characters:[{id:'demo-presenter'}]};active.add(j.id);store.saveJob(j);
+  const j=store.addJob({profileId:profile.id,title:'Tu estudio, en movimiento',topic:'Prueba local de exportación, sin IA ni voz de proveedor.',type:'video',style:'motion',episodes:1,duration:30,maxCredits:100,requestKey:randomUUID()});j.demo=true;j.resumeAutopilot=false;j.status='running';j.root=await requireStorage(store.settings().storageRoot);j.scripts=[{number:1,title:j.title,coverTitle:'Tu estudio, en movimiento',scenes:[],facebookCopy:'Demostración técnica. Sin voz de ElevenLabs.',instagramCopy:'Demostración técnica. Sin voz de ElevenLabs.'}];j.bible={characters:[{id:'demo-presenter'}]};active.add(j.id);store.saveJob(j);
   void(async()=>{try{const dir=path.join(j.root,'productions',j.id);await mkdir(dir,{recursive:true});const file=path.join(dir,'test-tone.wav');await processFile('ffmpeg',['-hide_banner','-loglevel','error','-y','-f','lavfi','-i','sine=frequency=440:duration=8','-af','volume=0.025',file],dir);j.audio[1]={file,duration:8,text:'Prueba de render local. Este video no utiliza voces ni créditos de ElevenLabs.'};j.videos[1]=await renderEpisode(j,profile,1,j.root,{width:720,height:1280});j.status='ready';j.progress=100;record(j,'MP4 de prueba de 8 segundos generado y verificado. Audio: tono de prueba. No hubo llamadas a IA.');}catch(e){j.status='failed';j.error=e.message;record(j,j.error);}finally{active.delete(j.id);store.saveJob(j);}})();return j;
 }
 const server=http.createServer(async(req,res)=>{try{
@@ -100,6 +106,27 @@ const server=http.createServer(async(req,res)=>{try{
   if(req.method==='POST'){
     const data=await body(req);
     if(url.pathname==='/api/profiles')store.addProfile(data);
+    else if(url.pathname==='/api/autopilot'){
+      if(admitting)throw new Error('Se está guardando otra solicitud. Intenta en un momento.');
+      admitting=true;try{
+        await analyticsSource.sync();const j=createAutopilot(store,data);scheduleReels(store,j);
+        if(!['ready','running','queued','failed','paused'].includes(j.status)){
+          try{await preflight(j);j.status='queued';j.error=null;record(j,'Piloto automático iniciado desde una frase.');queue.enqueue(j.id);}
+          catch(error){j.status='paused';j.error=error.issues?.[0]?.message||error.message;record(j,'Completa la configuración para iniciar: '+j.error);}
+        }
+      }finally{admitting=false;}
+    }
+    else if(url.pathname==='/api/publication'){changePublication(store,data);}
+    else if(url.pathname==='/api/analytics-sync'){await analyticsSource.sync(true);}
+    else if(url.pathname==='/api/analytics-settings'){
+      const d=z.object({url:z.union([z.literal(''),z.string().url()]),token:z.string().max(1000).default('')}).parse(data);
+      if(d.url)publisherUrl(d.url);store.saveSettings({analyticsUrl:d.url,analyticsLastAttempt:null},{analyticsToken:d.token});
+    }
+    else if(url.pathname==='/api/analytics-import'){importMetrics(store,data.rows);}
+    else if(url.pathname==='/api/publisher-settings'){
+      const d=z.object({url:z.union([z.literal(''),z.string().url()]),token:z.string().max(1000).default('')}).parse(data);
+      if(d.url)publisherUrl(d.url);store.saveSettings({publisherUrl:d.url},{publisherToken:d.token});
+    }
     else if(url.pathname==='/api/jobs'){store.addJob(data);}
     else if(url.pathname==='/api/settings'){
       const config=z.object({storageRoot:z.string().min(1).max(1000),textProvider:z.enum(['gemini','openai']).default('gemini'),textFallback:z.boolean().default(true),openaiTextModel:z.string().regex(/^[a-zA-Z0-9._:-]+$/).max(100).default('gpt-4.1-mini'),voiceModel:z.enum(['eleven_flash_v2_5','eleven_multilingual_v2']),monthlyCredits:z.number().int().min(100).max(30000),monthlyImages:z.number().int().min(1).max(10000).default(100),monthlyTextTokens:z.number().int().min(1000).max(100000000).default(500000),n8nUrl:z.union([z.literal(''),z.string().url()]),useN8n:z.boolean().default(true)}).parse(data);
@@ -207,7 +234,7 @@ const server=http.createServer(async(req,res)=>{try{
       }finally{admitting=false;}
     }
     else if(url.pathname==='/api/pause'){
-      const j=store.getJob(data.id);if(j.status==='ready')throw new Error('Este trabajo ya terminó.');
+      const j=store.getJob(data.id);j.resumeAutopilot=false;if(j.status==='ready')throw new Error('Este trabajo ya terminó.');
       if(j.renderOnly&&active.has(j.id))throw new Error('Espera a que termine la reexportación del montaje.');
       if(active.has(j.id)){pauses.add(j.id);record({...j},'Pausa solicitada; se aplicará al terminar la etapa en curso.');}
       else{queue.remove(j.id);pauses.delete(j.id);j.status='paused';record(j,'Pausada. Los avances se conservan y no bloquea las demás producciones.');}
@@ -228,5 +255,9 @@ const server=http.createServer(async(req,res)=>{try{
   }
   json(res,404,{error:'Ruta no encontrada.'});
 }catch(error){json(res,400,{error:error.issues?.[0]?.message||error.message||'No se pudo completar la operación.',code:error.code,budget:error.budget});}});
+for(const j of store.list('jobs'))if(canResumeAutopilot(store,j)){
+  j.resumeAutopilot=false;try{await preflight(j);j.status='queued';j.error=null;record(j,'Piloto recuperado después del reinicio.');queue.enqueue(j.id);}catch(error){j.error=error.message;record(j,'No se pudo reanudar el piloto: '+error.message);}
+}
+const publicationTimer=setInterval(()=>{publisher.tick().catch(error=>console.error('Cola de publicación:',error.message));analyticsSource.sync().catch(error=>console.error('Fuente de métricas:',error.message));},15000);publicationTimer.unref();
 server.listen(port,'127.0.0.1',()=>console.log(`Smart Studio: ${origin}`));
-for(const signal of ['SIGINT','SIGTERM'])process.on(signal,()=>{for(const id of active){const j=store.getJob(id);j.status='paused';j.error='El servicio se detuvo; revisa la etapa y reservas antes de continuar.';store.saveJob(j);}server.close(()=>process.exit(0));});
+for(const signal of ['SIGINT','SIGTERM'])process.on(signal,()=>{clearInterval(publicationTimer);for(const id of active){const j=store.getJob(id);j.resumeAutopilot=!!j.autopilot?.enabled;j.status='paused';j.error='El servicio se detuvo; revisa la etapa y reservas antes de continuar.';store.saveJob(j);}server.close(()=>process.exit(0));});
